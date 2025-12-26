@@ -1,6 +1,6 @@
 import sys
 import subprocess
-from misc import f
+from misc import f, print
 from PySide6.QtWidgets import (
   QApplication,
   QWidget,
@@ -439,6 +439,8 @@ class Launcher(QWidget):
     self.save_user_settings()
     super().closeEvent(event)
 
+  downloadingVersions = []
+
   def on_version_double_clicked(self, item):
     data = item.data(Qt.UserRole)
     if not data:
@@ -449,10 +451,15 @@ class Launcher(QWidget):
       path = data.get("path")
       if path:
         hooks.gameLaunchRequested(path)
+        f.write("./launcherData/lastRanVersion.txt", data.get("version"))
       return
 
     # Online → download
     if data["status"] == "Online":
+      if data["version"] in self.downloadingVersions:
+        return
+      self.downloadingVersions.append(data["version"])
+      print(data)
       release = data.get("release")
       if not release:
         return
@@ -517,6 +524,7 @@ class Launcher(QWidget):
       item.setData(Qt.UserRole, data)
       widget.set_label_color(LOCAL_COLOR)
       item.setText(f"Run version {data['version']}")
+      self.downloadingVersions.remove(data["version"])
       if extracted:
         print(f"{data['version']} downloaded and extracted successfully.")
 
