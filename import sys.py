@@ -1,6 +1,6 @@
 import sys
 import subprocess
-from misc import f, print
+from misc import f
 from PySide6.QtWidgets import (
   QApplication,
   QWidget,
@@ -17,6 +17,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QProgressBar
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import QUrl
 
 from PySide6.QtCore import Qt
 import os
@@ -30,7 +32,7 @@ ASSET_NAME = "windows.zip"
 GAME_FILE_NAME = "vex.pck"
 VERSIONS_DIR = "versions"
 USE_HARD_LINKS = True
-
+API_URL = "https://api.github.com/repos/rsa17826/vex-plus-plus/releases"
 
 class hooks:
   @staticmethod
@@ -56,6 +58,7 @@ import hashlib
 import os
 
 os.makedirs("./launcherData", exist_ok=True)
+os.makedirs("./gameData", exist_ok=True)
 
 
 def get_file_hash(path):
@@ -222,13 +225,12 @@ class ProgressDialog(QDialog):
 
 # ------------------- Release Fetch Thread -------------------
 class ReleaseFetchThread(QThread):
-  progress = Signal(int, int)  # current page, total pages
+  progress = Signal(int, int, list)  # current page, total pages
   finished = Signal(list)  # list of releases
   error = Signal(str)
 
-  def __init__(self, api_url, pat=None):
+  def __init__(self, pat=None):
     super().__init__()
-    self.api_url = api_url
     self.pat = pat
 
   def run(self):
@@ -245,7 +247,7 @@ class ReleaseFetchThread(QThread):
 
       # HEAD request to detect total pages
       head = requests.head(
-        f"{self.api_url}?page=0&rand={rand}", headers=headers, timeout=10
+        f"{API_URL}?page=0&rand={rand}", headers=headers, timeout=10
       )
       if "Link" in head.headers:
         m = re.search(
@@ -258,7 +260,7 @@ class ReleaseFetchThread(QThread):
       while True:
         page += 1
         r = requests.get(
-          f"{self.api_url}?page={page}&rand={rand}",
+          f"{API_URL}?page={page}&rand={rand}",
           headers=headers,
           timeout=30,
         )
@@ -398,9 +400,27 @@ class VersionItemWidget(QWidget):
     super().paintEvent(event)
 
 
-class Launcher(QWidget):
-  api_url = "https://api.github.com/repos/rsa17826/vex-plus-plus/releases"
+import sys
+from PySide6.QtWidgets import QPlainTextEdit
+from PySide6.QtGui import QTextCursor
 
+
+class ConsoleRedirector:
+  def __init__(self, text_widget):
+    self.text_widget = text_widget
+
+  def write(self, text):
+    # Move cursor to the end so it scrolls automatically
+    self.text_widget.moveCursor(QTextCursor.End)
+    self.text_widget.insertPlainText(text)
+    # Ensure it scrolls to the new text
+    self.text_widget.ensureCursorVisible()
+
+  def flush(self):
+    # Required for file-like objects
+    pass
+
+class Launcher(QWidget):
   def save_user_settings(self):
     settings = {}
 
@@ -525,6 +545,9 @@ class Launcher(QWidget):
     dl_thread.start()
 
   def update_version_list(self, releases):
+    self.version_list.setUpdatesEnabled(False)
+    scrollbar = self.version_list.verticalScrollBar()
+    previous_scroll_pos = scrollbar.value()
     # 1. Gather all data into a temporary list first
     all_items_data = []
 
@@ -587,6 +610,8 @@ class Launcher(QWidget):
       add_version_item(
         self.version_list, version, status="Online", path=None, release=rel
       )
+    scrollbar.setValue(previous_scroll_pos)
+    self.version_list.setUpdatesEnabled(True)
 
   def load_local_versions(self):
     self.version_list.clear()
@@ -664,6 +689,19 @@ class Launcher(QWidget):
     main_layout.addWidget(self.version_list)
 
     self.widgets_to_save = {}  # store widgets for saving
+    self.console_output = QPlainTextEdit()
+    self.console_output.setReadOnly(True)
+    self.console_output.setPlaceholderText("Launcher logs will appear here...")
+    self.console_output.setStyleSheet(
+      """background-color: #1e1e1e; color: #d4d4d4; font-family: 'Consolas', 'Monaco', monospace;font-size: 10pt;"""
+    )
+
+    # Add it to your layout (e.g., at the bottom)
+    main_layout.addWidget(self.console_output)
+
+    # Redirect standard output and error
+    sys.stdout = ConsoleRedirector(self.console_output)
+    sys.stderr = ConsoleRedirector(self.console_output)
 
     # --- Command input ---
     self.command_input = QLineEdit("--loadMap NEWEST")
@@ -672,12 +710,31 @@ class Launcher(QWidget):
 
     # --- Buttons row ---
     btn_row1 = QHBoxLayout()
-    btn_row1.addWidget(QPushButton("open launcher log"))
-    btn_row1.addWidget(QPushButton("open game logs folder"))
-    main_layout.addLayout(btn_row1)
+    temp = QPushButton("open launcher log")
+    btn_row1.addWidget(temp)
 
+    def a():
+      path = os.path.abspath("./logs")
+      QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+
+    temp.clicked.connect(a)
+    temp = QPushButton("open game logs folder")
+    btn_row1.addWidget(temp)
+    # def a():
+    #   path = os.path.abspath("./gameData")
+    #   QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+    # temp.clicked.connect(a)
+
+    main_layout.addLayout(btn_row1)
     btn_row2 = QHBoxLayout()
-    btn_row2.addWidget(QPushButton("open game data folder"))
+    temp = QPushButton("open game data folder")
+
+    def a():
+      path = os.path.abspath("./gameData")
+      QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+
+    temp.clicked.connect(a)
+    btn_row2.addWidget(temp)
     main_layout.addLayout(btn_row2)
 
     # --- Masked field ---
@@ -693,10 +750,10 @@ class Launcher(QWidget):
     # --- Checkboxes ---
     self.checkboxes = {}
     checks = [
-      "check for updates on boot",
-      "use xdm",
-      "check for updates when opening",
-      "open console with game",
+      # "check for updates on boot",
+      # "use xdm",
+      "check for launcher updates when opening",
+      # "open console with game",
     ]
     for text in checks:
       cb = QCheckBox(text)
@@ -705,11 +762,6 @@ class Launcher(QWidget):
       self.checkboxes[text] = cb
       self.widgets_to_save[f"cb_{text}"] = cb
 
-    # --- Launch button ---
-    launch_btn = QPushButton("Launch Selected Version")
-    launch_btn.clicked.connect(launch_game)
-    main_layout.addWidget(launch_btn, alignment=Qt.AlignBottom)
-
     # Load saved settings
     self.load_user_settings()
 
@@ -717,7 +769,7 @@ class Launcher(QWidget):
     if not OFFLINE:
       self.progress_dialog = ProgressDialog("Loading releases")
       self.release_thread = ReleaseFetchThread(
-        self.api_url, pat=self.github_pat.text() or None
+        pat=self.github_pat.text() or None
       )
       self.release_thread.progress.connect(self.on_release_progress)
       self.release_thread.finished.connect(self.on_release_finished)
@@ -738,7 +790,6 @@ class Launcher(QWidget):
   def on_release_finished(self, releases):
     self.progress_dialog.close()
     self.update_version_list(releases)
-
 
 app = QApplication(sys.argv)
 window = Launcher()
