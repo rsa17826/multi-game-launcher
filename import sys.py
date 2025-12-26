@@ -31,8 +31,11 @@ SILENT = False
 ASSET_NAME = "windows.zip"
 GAME_FILE_NAME = "vex.pck"
 VERSIONS_DIR = "versions"
+WINDOW_TITLE = "vex++ launcher"
 USE_HARD_LINKS = True
+USE_CENTRAL_GAME_DATA_FOLDER = True
 API_URL = "https://api.github.com/repos/rsa17826/vex-plus-plus/releases"
+
 
 class hooks:
   @staticmethod
@@ -321,12 +324,26 @@ def create_version_item_widget(version_text, color):
   return VersionItemWidget(version_text, color)
 
 
+from enum import Enum
+
+
 class VersionItemWidget(QWidget):
+  class ProgressTypes(Enum):
+    leftToRight = 0
+    both = 1
+    rightToLeft = 2
+
   def __init__(self, text, color):  # Added color argument
     super().__init__()
     self.text = text
     self.progress = 0
-
+    self.progressColor = (0, 210, 255)
+    self.progressColor = (255, 108, 0)
+    self.progressType = VersionItemWidget.ProgressTypes.leftToRight
+    self.progressType = VersionItemWidget.ProgressTypes.both
+    self.noKnownEndPoint = True
+    self.startTime = 0
+    self.animSpeed = 10
     self.setAttribute(Qt.WA_TranslucentBackground)
     self.setStyleSheet("background: transparent; border: none;")
 
@@ -340,7 +357,6 @@ class VersionItemWidget(QWidget):
     layout.addWidget(self.label)
     layout.addStretch()
 
-  # Add a method to change color dynamically if needed
   def set_label_color(self, color):
     self.label.setStyleSheet(f"background: transparent; color: {color.name};")
 
@@ -349,55 +365,78 @@ class VersionItemWidget(QWidget):
     self.update()  # repaint
 
   def paintEvent(self, event):
+    if not (0 < self.progress < 100):
+      super().paintEvent(event)
+      return
+
     painter = QPainter(self)
+    painter.setRenderHint(QPainter.Antialiasing)
     rect = self.rect()
+    w = rect.width()
+    h = rect.height()
+    gradSize = int(w / 8)  # Slightly smaller grad for 'both' to avoid crowding
     minGradAlpha = 50
-    if self.progress > 0 and self.progress < 100:
-      progress_rect = QRectF(rect)
-      gradSize = rect.width() / 5
-      progress_rect.setWidth(
-        max(0, (rect.width() * self.progress / 100) - gradSize)
+    if self.noKnownEndPoint:
+      self.progress = int(((time.time() - self.startTime) * self.animSpeed) % 100)
+    # Determine the width of one 'half' bar
+    # At 100% progress, each half is 50% of the total width
+    if self.progressType == self.ProgressTypes.both:
+      fill_end = w * self.progress / 100
+      solid_rect = QRectF(0, 0, max(0, fill_end - gradSize), h)
+      tip_rect = QRectF(solid_rect.right(), 0, int(min(gradSize, fill_end)), h)
+      self._draw_progress(painter, solid_rect, minGradAlpha)
+      self._draw_gradient(
+        painter, tip_rect, tip_rect.topLeft(), tip_rect.topRight(), minGradAlpha
+      )
+      fill_start = w - (w * (100 - self.progress) / 100)
+      solid_rect = QRectF(
+        int(fill_start + gradSize), 0, w - int(fill_start + gradSize), h
+      )
+      tip_rect = QRectF(
+        int(max(fill_start, 0)), 0, int(min(gradSize, w - fill_start)), h
+      )
+      self._draw_progress(painter, solid_rect, minGradAlpha)
+      self._draw_gradient(
+        painter, tip_rect, tip_rect.topRight(), tip_rect.topLeft(), minGradAlpha
       )
 
-      tr = progress_rect.topRight()
-      tr.setX(progress_rect.topRight().x() - gradSize)
-      gradient = QLinearGradient(progress_rect.topLeft(), tr)
+    elif self.progressType == self.ProgressTypes.leftToRight:
+      fill_end = w * self.progress / 100
+      solid_rect = QRectF(0, 0, max(0, fill_end - gradSize), h)
+      tip_rect = QRectF(solid_rect.right(), 0, min(gradSize, fill_end), h)
+      self._draw_progress(painter, solid_rect, minGradAlpha)
+      self._draw_gradient(
+        painter, tip_rect, tip_rect.topLeft(), tip_rect.topRight(), minGradAlpha
+      )
 
-      gradient.setColorAt(0, QColor(0, 210, 255, minGradAlpha))
-      gradient.setColorAt(1, QColor(0, 210, 255, minGradAlpha))
+    elif self.progressType == self.ProgressTypes.rightToLeft:
+      fill_start = w - (w * self.progress / 100)
+      solid_rect = QRectF(
+        fill_start + gradSize, 0, w - (fill_start + gradSize), h
+      )
+      tip_rect = QRectF(max(fill_start, 0), 0, min(gradSize, w - fill_start), h)
+      self._draw_progress(painter, solid_rect, minGradAlpha)
+      self._draw_gradient(
+        painter, tip_rect, tip_rect.topRight(), tip_rect.topLeft(), minGradAlpha
+      )
 
-      painter.fillRect(progress_rect, gradient)
-
-      # Adjust the second gradient position for a smoother transition
-      tip_rect = QRectF(rect)
-      tip_rect.setLeft(max(0, (rect.width() * self.progress / 100) - gradSize))
-      tip_rect.setWidth(min(gradSize, (rect.width() * self.progress / 100)))
-
-      # Slightly adjust the position of the second gradient for smoothness
-      gradient2 = QLinearGradient(tip_rect.topLeft(), tip_rect.topRight())
-      # Number of stops to simulate the curve (more stops = smoother curve)
-      num_stops = 10
-      # The exponent: 2 is a standard curve, 3+ is very "sharp"
-      exponent = 5
-
-      for i in range(num_stops + 1):
-        pos = i / float(num_stops)
-        # Exponential interpolation formula:
-        # alpha = min + (max - min) * (pos ^ exponent)
-        alpha = minGradAlpha + (255 - minGradAlpha) * math.pow(pos, exponent)
-
-        gradient2.setColorAt(pos, QColor(0, 210, 255, int(alpha)))
-
-      gradient2.setColorAt(
-        0, QColor(0, 210, 255, minGradAlpha)
-      )  # Less transparent
-      gradient2.setColorAt(1, QColor(0, 210, 255, 255))  # Fully opaque at the end
-
-      # Apply the second gradient
-      painter.fillRect(tip_rect, gradient2)
-
-    # Draw children (label) on top
     super().paintEvent(event)
+
+  def _draw_progress(self, painter, rect, alpha):
+    if rect.width() <= 0:
+      return
+    painter.fillRect(rect, QColor(self.progressColor + (alpha,)))
+
+  def _draw_gradient(self, painter, rect, start_pt, end_pt, min_alpha):
+    if rect.width() <= 0:
+      return
+    grad = QLinearGradient(start_pt, end_pt)
+    exponent = 5
+    for i in range(11):
+      pos = i / 10.0
+      alpha = int(min_alpha + (255 - min_alpha) * math.pow(pos, exponent))
+      grad.setColorAt(pos, QColor(self.progressColor + (alpha,)))
+    painter.fillRect(rect, grad)
 
 
 import sys
@@ -419,6 +458,7 @@ class ConsoleRedirector:
   def flush(self):
     # Required for file-like objects
     pass
+
 
 class Launcher(QWidget):
   def save_user_settings(self):
@@ -527,7 +567,7 @@ class Launcher(QWidget):
       if extracted and USE_HARD_LINKS:
         deduplicate_with_hardlinks(extract_dir)
       # Update list item as Local
-      widget.set_progress(100)
+      widget.set_progress(101)
       item.setData(Qt.UserRole, data)
       widget.set_label_color(LOCAL_COLOR)
       item.setText(f"Run version {data['version']}")
@@ -664,11 +704,25 @@ class Launcher(QWidget):
     versions_data.sort(key=get_sort_key, reverse=True)
     return versions_data
 
+  def toggle_console(self):
+    if self.is_console_expanded:
+      self.console_output.setFixedHeight(28)
+      # Hide scrollbar in one-line mode
+      self.console_output.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+      self.console_toggle_btn.setText("▲")
+      self.is_console_expanded = False
+    else:
+      self.console_output.setFixedHeight(150)
+      # Show scrollbar in expanded mode
+      self.console_output.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+      self.console_toggle_btn.setText("▼")
+      self.is_console_expanded = True
+
   def __init__(self):
     super().__init__()
 
     self.active_downloads = []
-    self.setWindowTitle("Vex++ Version Manager")
+    self.setWindowTitle(WINDOW_TITLE)
     self.setFixedSize(420, 600)
     self.setStyleSheet(f.read("./main.css"))
 
@@ -689,22 +743,43 @@ class Launcher(QWidget):
     main_layout.addWidget(self.version_list)
 
     self.widgets_to_save = {}  # store widgets for saving
+    # Container for the console
+    self.console_row_layout = QHBoxLayout()
+    self.console_row_layout.setSpacing(2)
+
+    # 2. Setup the Console Widget
     self.console_output = QPlainTextEdit()
     self.console_output.setReadOnly(True)
-    self.console_output.setPlaceholderText("Launcher logs will appear here...")
+    self.console_output.setFixedHeight(28)
+    self.is_console_expanded = False
     self.console_output.setStyleSheet(
-      """background-color: #1e1e1e; color: #d4d4d4; font-family: 'Consolas', 'Monaco', monospace;font-size: 10pt;"""
+      """background-color: #1e1e1e; color: #d4d4d4;font-family: 'Consolas', monospace; font-size: 10pt;border: 1px solid #333;"""
     )
 
-    # Add it to your layout (e.g., at the bottom)
-    main_layout.addWidget(self.console_output)
+    # 3. Setup the 1x1 Toggle Button
+    self.console_toggle_btn = QPushButton("▲")
+    self.console_toggle_btn.setFixedSize(28, 28)
+    self.console_toggle_btn.setCursor(Qt.PointingHandCursor)
+    self.console_toggle_btn.clicked.connect(self.toggle_console)
 
-    # Redirect standard output and error
+    # 4. Add widgets with explicit Bottom Alignment
+    # The console expands, so it doesn't need a specific alignment,
+    # but the button must be told to stay down.
+    self.console_row_layout.addWidget(self.console_output)
+    self.console_row_layout.addWidget(
+      self.console_toggle_btn, alignment=Qt.AlignBottom
+    )
+
+    # 5. Add the row to your main layout
+    main_layout.addLayout(self.console_row_layout)
+
+    # Redirects
     sys.stdout = ConsoleRedirector(self.console_output)
     sys.stderr = ConsoleRedirector(self.console_output)
 
     # --- Command input ---
-    self.command_input = QLineEdit("--loadMap NEWEST")
+    self.command_input = QLineEdit("")
+    self.command_input.setPlaceholderText("game args go here")
     main_layout.addWidget(self.command_input)
     self.widgets_to_save["command_input"] = self.command_input
 
@@ -727,15 +802,16 @@ class Launcher(QWidget):
 
     main_layout.addLayout(btn_row1)
     btn_row2 = QHBoxLayout()
-    temp = QPushButton("open game data folder")
+    if USE_CENTRAL_GAME_DATA_FOLDER:
+      temp = QPushButton("open game data folder")
 
-    def a():
-      path = os.path.abspath("./gameData")
-      QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+      def a():
+        path = os.path.abspath("./gameData")
+        QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
-    temp.clicked.connect(a)
-    btn_row2.addWidget(temp)
-    main_layout.addLayout(btn_row2)
+      temp.clicked.connect(a)
+      btn_row2.addWidget(temp)
+      main_layout.addLayout(btn_row2)
 
     # --- Masked field ---
     self.github_pat = QLineEdit()
@@ -743,9 +819,6 @@ class Launcher(QWidget):
     self.github_pat.setPlaceholderText("github pat (optional)")
     main_layout.addWidget(self.github_pat)
     self.widgets_to_save["github_pat"] = self.github_pat
-
-    # --- Fix button ---
-    main_layout.addWidget(QPushButton("try fix new maps for old versions"))
 
     # --- Checkboxes ---
     self.checkboxes = {}
@@ -768,9 +841,7 @@ class Launcher(QWidget):
     # ---- ONLINE FETCH (only if not offline) ----
     if not OFFLINE:
       self.progress_dialog = ProgressDialog("Loading releases")
-      self.release_thread = ReleaseFetchThread(
-        pat=self.github_pat.text() or None
-      )
+      self.release_thread = ReleaseFetchThread(pat=self.github_pat.text() or None)
       self.release_thread.progress.connect(self.on_release_progress)
       self.release_thread.finished.connect(self.on_release_finished)
       self.update_version_list([])
@@ -790,6 +861,7 @@ class Launcher(QWidget):
   def on_release_finished(self, releases):
     self.progress_dialog.close()
     self.update_version_list(releases)
+
 
 app = QApplication(sys.argv)
 window = Launcher()
