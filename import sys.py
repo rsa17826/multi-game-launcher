@@ -834,7 +834,7 @@ class Launcher(QWidget):
     # ---- ONLINE FETCH (only if not offline) ----
     if not OFFLINE:
       self.release_thread = ReleaseFetchThread(pat=self.github_pat.text() or None)
-      self.main_progress_bar.text = "Loading Game Versions"
+      self.main_progress_bar.label.setText("Loading Game Versions")
       self.main_progress_bar.noKnownEndPoint = True
       self.main_progress_bar.update()
       self.release_thread.progress.connect(self.on_release_progress)
@@ -856,7 +856,7 @@ class Launcher(QWidget):
     self.update_version_list(releases)
 
   def on_release_finished(self, releases):
-    self.main_progress_bar.text = ""
+    self.main_progress_bar.label.setText("")
     self.main_progress_bar.set_progress(101)
     self.update_version_list(releases)
 
