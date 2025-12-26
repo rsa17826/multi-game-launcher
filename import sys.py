@@ -45,6 +45,9 @@ USE_CENTRAL_GAME_DATA_FOLDER = True
 API_URL = "https://api.github.com/repos/rsa17826/vex-plus-plus/releases"
 
 
+SETTINGS_FILE = "launcher_settings.json"
+
+
 class hooks:
   @staticmethod
   def gameVersionExists(full_path):
@@ -55,6 +58,10 @@ class hooks:
     exe = os.path.join(path, "vex.exe")
     if os.path.isfile(exe):
       subprocess.Popen([exe], cwd=path)
+
+  @staticmethod
+  def addCustomNodes(_self):
+    pass
 
 
 LOCAL_COLOR = Qt.green
@@ -102,9 +109,6 @@ def deduplicate_with_hardlinks(new_version_dir):
       try:
         stat = os.stat(full_path)
 
-        # OPTIMIZATION: If this file is already a hardlink (nlink > 1),
-        # we don't need to add it to the map because another copy
-        # of it (the original) is already likely in the map.
         if stat.st_nlink > 1 and (stat.st_size, filename) in file_map:
           continue
         if (stat.st_size, filename) not in file_map:
@@ -161,7 +165,8 @@ def add_version_item(list_widget, version, status, path=None, release=None):
   )
 
   # Pass the color to the widget
-  widget = create_version_item_widget(text, color)
+  widget = VersionItemWidget(text, color)
+  widget.setModeKnownEnd()
 
   item.setSizeHint(widget.sizeHint())
   list_widget.addItem(item)
@@ -208,30 +213,6 @@ class AssetDownloadThread(QThread):
       self.finished.emit(self.dest)
     except Exception as e:
       self.error.emit(str(e))
-
-
-# ------------------- Progress Dialog -------------------
-class ProgressDialog(QDialog):
-  def __init__(self, title="Loading releases"):
-    super().__init__()
-    self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-    self.setWindowTitle(title)
-
-    layout = QVBoxLayout(self)
-
-    self.text = QLabel("Starting...")
-    self.text.setAlignment(Qt.AlignCenter)
-
-    self.percent = QLabel("0% Done")
-    self.percent.setAlignment(Qt.AlignCenter)
-
-    self.bar = QProgressBar()
-    self.bar.setRange(0, 100)
-
-    layout.addWidget(self.text)
-    layout.addWidget(self.bar)
-    layout.addWidget(self.percent)
-    self.resize(250, 90)
 
 
 # ------------------- Release Fetch Thread -------------------
@@ -293,12 +274,6 @@ class ReleaseFetchThread(QThread):
       self.error.emit(str(e))
 
 
-doing_something = False
-
-
-SETTINGS_FILE = "launcher_settings.json"
-
-
 def save_settings(settings: dict):
   try:
     with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
@@ -318,10 +293,6 @@ def load_settings() -> dict:
     return {}
 
 
-def create_version_item_widget(version_text, color):
-  return VersionItemWidget(version_text, color)
-
-
 class VersionItemWidget(QWidget):
   class ProgressTypes(Enum):
     leftToRight = 0
@@ -332,9 +303,7 @@ class VersionItemWidget(QWidget):
     super().__init__()
     self.text = text
     self.progress = 0
-    self.progressColor = UNKNOWN_TIME_LOADING_COLOR
-    self.progressType = VersionItemWidget.ProgressTypes.both
-    self.noKnownEndPoint = False
+    self.setModeUnknownEnd()
     self.startTime = 0
     self.animSpeed = 10
     self.setAttribute(Qt.WA_TranslucentBackground)
@@ -350,10 +319,28 @@ class VersionItemWidget(QWidget):
     layout.addWidget(self.label)
     layout.addStretch()
 
+  def setModeKnownEnd(self):
+    flag = self.noKnownEndPoint
+    self.progressColor = MAIN_LOADING_COLOR
+    self.progressType = VersionItemWidget.ProgressTypes.leftToRight
+    self.noKnownEndPoint = False
+    if flag:
+      self.progress = 0
+      self.update()
+
+  def setModeUnknownEnd(self):
+    self.progressColor = UNKNOWN_TIME_LOADING_COLOR
+    self.progressType = VersionItemWidget.ProgressTypes.both
+    self.noKnownEndPoint = True
+    self.update()
+
   def set_label_color(self, color):
     self.label.setStyleSheet(f"background: transparent; color: {color.name};")
 
   def set_progress(self, percent):
+    if self.noKnownEndPoint:
+      self.noKnownEndPoint = False
+      self.setModeKnownEnd()
     self.progress = percent
     self.update()  # repaint
 
@@ -736,48 +723,9 @@ class Launcher(QWidget):
     main_layout.addWidget(self.version_list)
 
     self.widgets_to_save = {}  # store widgets for saving
-    # Container for the console
-    self.console_row_layout = QHBoxLayout()
-    self.console_row_layout.setSpacing(2)
-
-    # 2. Setup the Console Widget
-    self.console_output = QPlainTextEdit()
-    self.console_output.setReadOnly(True)
-    self.console_output.setFixedHeight(28)
-    self.is_console_expanded = False
-    self.console_output.setStyleSheet(
-      """background-color: #1e1e1e; color: #d4d4d4;font-family: 'Consolas', monospace; font-size: 10pt;border: 1px solid #333;"""
-    )
-
-    # 3. Setup the 1x1 Toggle Button
-    self.console_toggle_btn = QPushButton("▲")
-    self.console_toggle_btn.setFixedSize(28, 28)
-    self.console_toggle_btn.setCursor(Qt.PointingHandCursor)
-    self.console_toggle_btn.clicked.connect(self.toggle_console)
-
-    # 4. Add widgets with explicit Bottom Alignment
-    # The console expands, so it doesn't need a specific alignment,
-    # but the button must be told to stay down.
-    self.console_row_layout.addWidget(self.console_output)
-    self.console_row_layout.addWidget(
-      self.console_toggle_btn, alignment=Qt.AlignBottom
-    )
-
-    # 5. Add the row to your main layout
-    main_layout.addLayout(self.console_row_layout)
-
-    # Redirects
-    sys.stdout = ConsoleRedirector(self.console_output)
-    sys.stderr = ConsoleRedirector(self.console_output)
     self.main_progress_bar = VersionItemWidget("", MISSING_COLOR)
     main_layout.addWidget(self.main_progress_bar)
-    # --- Command input ---
-    self.command_input = QLineEdit("")
-    self.command_input.setPlaceholderText("game args go here")
-    main_layout.addWidget(self.command_input)
-    self.widgets_to_save["command_input"] = self.command_input
 
-    # --- Buttons row ---
     btn_row1 = QHBoxLayout()
     temp = QPushButton("open launcher log")
     btn_row1.addWidget(temp)
@@ -791,9 +739,11 @@ class Launcher(QWidget):
     if GAME_LOG_LOCATION:
       temp = QPushButton("open game logs folder")
       btn_row1.addWidget(temp)
+
       def a():
         path = os.path.abspath(GAME_LOG_LOCATION)
         QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+
       temp.clicked.connect(a)
 
     main_layout.addLayout(btn_row1)
@@ -829,16 +779,52 @@ class Launcher(QWidget):
       main_layout.addWidget(cb)
       self.checkboxes[text] = cb
       self.widgets_to_save[f"cb_{text}"] = cb
-
+    self.command_input = QLineEdit("")
+    self.command_input.setPlaceholderText("game args go here")
+    main_layout.addWidget(self.command_input)
+    self.widgets_to_save["command_input"] = self.command_input
     # Load saved settings
     self.load_user_settings()
+    hooks.addCustomNodes(self)
 
+    # Container for the console
+    self.console_row_layout = QHBoxLayout()
+    self.console_row_layout.setSpacing(2)
+
+    # 2. Setup the Console Widget
+    self.console_output = QPlainTextEdit()
+    self.console_output.setReadOnly(True)
+    self.console_output.setFixedHeight(28)
+    self.is_console_expanded = False
+    self.console_output.setStyleSheet(
+      """background-color: #1e1e1e; color: #d4d4d4;font-family: 'Consolas', monospace; font-size: 10pt;border: 1px solid #333;"""
+    )
+
+    # 3. Setup the 1x1 Toggle Button
+    self.console_toggle_btn = QPushButton("▲")
+    self.console_toggle_btn.setFixedSize(28, 28)
+    self.console_toggle_btn.setCursor(Qt.PointingHandCursor)
+    self.console_toggle_btn.clicked.connect(self.toggle_console)
+
+    # 4. Add widgets with explicit Bottom Alignment
+    # The console expands, so it doesn't need a specific alignment,
+    # but the button must be told to stay down.
+    self.console_row_layout.addWidget(self.console_output)
+    self.console_row_layout.addWidget(
+      self.console_toggle_btn, alignment=Qt.AlignBottom
+    )
+
+    # 5. Add the row to your main layout
+    main_layout.addLayout(self.console_row_layout)
+
+    # Redirects
+    sys.stdout = ConsoleRedirector(self.console_output)
+    sys.stderr = ConsoleRedirector(self.console_output)
     # ---- ONLINE FETCH (only if not offline) ----
     if not OFFLINE:
       self.release_thread = ReleaseFetchThread(pat=self.github_pat.text() or None)
       self.main_progress_bar.label.setText("Loading Game Versions")
-      self.main_progress_bar.noKnownEndPoint = True
-      self.main_progress_bar.update()
+      self.main_progress_bar.setModeUnknownEnd()
       self.release_thread.progress.connect(self.on_release_progress)
       self.release_thread.finished.connect(self.on_release_finished)
       self.update_version_list([])
@@ -849,11 +835,7 @@ class Launcher(QWidget):
       self.main_progress_bar.show()
 
   def on_release_progress(self, page, total, releases):
-    self.main_progress_bar.progressColor = MAIN_LOADING_COLOR
-    self.main_progress_bar.progressType = (
-      VersionItemWidget.ProgressTypes.leftToRight
-    )
-    self.main_progress_bar.noKnownEndPoint = False
+    self.main_progress_bar.setModeKnownEnd()
     self.main_progress_bar.set_progress((page / total) * 100)
     self.update_version_list(releases)
 
