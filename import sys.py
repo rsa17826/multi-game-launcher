@@ -332,6 +332,7 @@ class VersionItemWidget(QWidget):
     self.progressColor = UNKNOWN_TIME_LOADING_COLOR
     self.progressType = VersionItemWidget.ProgressTypes.both
     self.noKnownEndPoint = True
+    self.startTime = time.time()
     self.update()
 
   def set_label_color(self, color):
@@ -345,7 +346,7 @@ class VersionItemWidget(QWidget):
     self.update()  # repaint
 
   def paintEvent(self, event):
-    if not ((0 <= self.progress <= 100) or self.noKnownEndPoint):
+    if not ((0 < self.progress <= 100) or self.noKnownEndPoint):
       super().paintEvent(event)
       return
 
@@ -547,19 +548,6 @@ class Launcher(QWidget):
       # 1. Clean up tracking
       if tag in self.active_downloads:
         del self.active_downloads[tag]
-
-      # 2. Existing extraction logic
-      widget.set_progress(100)
-      widget.setModeUnknownEnd()
-      # ... (extract your zip/7z files as before) ...
-
-      # 3. Mark as local
-      widget.set_progress(101)
-      widget.set_label_color(LOCAL_COLOR)
-      widget.label.setText(f"Run version {tag}")
-      self.downloadingVersions.remove(tag)
-
-      # 4. Trigger the next download in queue
       self.process_download_queue()
 
     dl_thread.finished.connect(on_finished)
@@ -605,7 +593,7 @@ class Launcher(QWidget):
       widget.set_progress(101)
       item.setData(Qt.UserRole, data)
       widget.set_label_color(LOCAL_COLOR)
-      item.setText(f"Run version {data['version']}")
+      widget.label.setText(f"Run version {data['version']}")
       self.downloadingVersions.remove(data["version"])
       if extracted:
         print(f"{data['version']} downloaded and extracted successfully.")
