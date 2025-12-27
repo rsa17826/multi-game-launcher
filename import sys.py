@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
   QListWidgetItem,
   QProgressBar,
   QDialog,
+  QSpinBox,
 )
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QProgressBar
@@ -444,14 +445,13 @@ class ConsoleRedirector:
 class Launcher(QWidget):
   def save_user_settings(self):
     settings = {}
-
-    # Line edits
     for key, widget in self.widgets_to_save.items():
       if isinstance(widget, QLineEdit):
         settings[key] = widget.text()
       elif isinstance(widget, QCheckBox):
         settings[key] = widget.isChecked()
-
+      elif isinstance(widget, QSpinBox):  # Added this
+        settings[key] = widget.value()
     save_settings(settings)
 
   def load_user_settings(self):
@@ -460,9 +460,11 @@ class Launcher(QWidget):
       widget = self.widgets_to_save.get(key)
       if widget:
         if isinstance(widget, QLineEdit):
-          widget.setText(value)
+          widget.setText(str(value))
         elif isinstance(widget, QCheckBox):
           widget.setChecked(bool(value))
+        elif isinstance(widget, QSpinBox):  # Added this
+          widget.setValue(int(value))
 
   def closeEvent(self, event):
     self.save_user_settings()
@@ -485,47 +487,46 @@ class Launcher(QWidget):
 
     # Online → download
     if data["status"] == "Online":
-      if data["version"] in self.downloadingVersions:
-        return
-      self.downloadingVersions.append(data["version"])
-      release = data.get("release")
-      if not release:
-        return
+      self.start_queued_download_request(item)
 
-      assets = release.get("assets", [])
-      if not assets:
-        print("No assets to download")
-        return
+  def start_queued_download_request(self, item):
+    data = item.data(Qt.UserRole)
+    tag = data["version"]
 
-      # find asset by name
-      asset = next((a for a in assets if a["name"] == ASSET_NAME), None)
-      if not asset:
-        print(f"Asset '{ASSET_NAME}' not found for {release['tag_name']}")
-        return
+    if tag in self.downloadingVersions:
+      return
 
-      url = asset["browser_download_url"]
-      tag = release["tag_name"]
-      dest_dir = os.path.join(VERSIONS_DIR, tag)
-      os.makedirs(dest_dir, exist_ok=True)
+    self.downloadingVersions.append(tag)
+    release = data.get("release")
+    asset = next(
+      (a for a in release.get("assets", []) if a["name"] == ASSET_NAME), None
+    )
 
-      out_file = os.path.join(dest_dir, asset["name"])
-      # Set widget to "Waiting" state immediately
-      widget = data["widget"]
-      widget.label.setText(f"Waiting to download {tag}...")
-      widget.setModeUnknownEnd()  # orange pulsing bar
+    if not asset:
+      print(f"Asset not found for {tag}")
+      self.downloadingVersions.remove(tag)
+      return
 
-      # Add to queue
-      self.download_queue.append(
-        (item, asset["browser_download_url"], out_file, dest_dir)
-      )
-      self.process_download_queue()
-      # pass dest_dir for extraction
-      # self.download_online_version(item, url, out_file, dest_dir)
+    dest_dir = os.path.join(VERSIONS_DIR, tag)
+    os.makedirs(dest_dir, exist_ok=True)
+    out_file = os.path.join(dest_dir, asset["name"])
+
+    # UI state: Waiting (Orange Pulse)
+    widget = data["widget"]
+    widget.label.setText(f"Waiting: {tag}")
+    widget.setModeUnknownEnd()
+
+    # Add to queue and process
+    self.download_queue.append(
+      (item, asset["browser_download_url"], out_file, dest_dir)
+    )
+    self.process_download_queue()
 
   def process_download_queue(self):
     # While we have room for more downloads and items in the queue
-    while (
-      len(self.active_downloads) < self.max_concurrent_dls and self.download_queue
+    while self.download_queue and (
+      len(self.active_downloads) < self.max_dl_spinbox.value()
+      or self.max_dl_spinbox.value() == 0
     ):
       next_dl = self.download_queue.pop(0)
       self.start_actual_download(*next_dl)
@@ -741,11 +742,29 @@ class Launcher(QWidget):
       self.console_toggle_btn.setText("▼")
       self.is_console_expanded = True
 
+  def download_all_versions(self):
+    online_count = 0
+    for i in range(self.version_list.count()):
+      item = self.version_list.item(i)
+      data = item.data(Qt.UserRole)
+
+      # Check if it's Online and not already in the process of downloading
+      if data and data.get("status") == "Online":
+        version = data.get("version")
+        if version not in self.downloadingVersions:
+          # We reuse the logic from on_version_double_clicked
+          self.start_queued_download_request(item)
+          online_count += 1
+
+    if online_count > 0:
+      print(f"Added {online_count} versions to the download queue.")
+    else:
+      print("No new online versions found to download.")
+
   def __init__(self):
     super().__init__()
     self.active_downloads = {}  # {version_tag: thread_object}
     self.download_queue = []  # List of (item, url, out_file, extract_dir)
-    self.max_concurrent_dls = 3
     self.setWindowTitle(WINDOW_TITLE)
     self.setFixedSize(420, 600)
     self.setStyleSheet(f.read("./main.css"))
@@ -801,14 +820,38 @@ class Launcher(QWidget):
 
       temp.clicked.connect(a)
       btn_row2.addWidget(temp)
-      main_layout.addLayout(btn_row2)
+    main_layout.addLayout(btn_row2)
 
+    settings_row = QHBoxLayout()
+
+    # Label for the spinbox
+    max_dl_label = QLabel("Max Concurrent Downloads:")
+
+    self.max_dl_spinbox = QSpinBox()
+    self.max_dl_spinbox.setRange(0, 10)
+    self.max_dl_spinbox.setValue(3)
+    self.max_dl_spinbox.setFixedWidth(60)
+
+    # Hook the change event
+    self.max_dl_spinbox.valueChanged.connect(self.process_download_queue)
+
+    settings_row.addWidget(max_dl_label)
+    settings_row.addWidget(self.max_dl_spinbox)
+    settings_row.addStretch()  # Push widgets to the left
+
+    main_layout.addLayout(settings_row)
+
+    # Add to save-list so it persists between restarts
+    self.widgets_to_save["max_concurrent_dls"] = self.max_dl_spinbox
     self.github_pat = QLineEdit()
     self.github_pat.setEchoMode(QLineEdit.Password)
     self.github_pat.setPlaceholderText("github pat (optional)")
     main_layout.addWidget(self.github_pat)
     self.widgets_to_save["github_pat"] = self.github_pat
 
+    self.btn_download_all = QPushButton("Download All Versions")
+    self.btn_download_all.clicked.connect(self.download_all_versions)
+    btn_row2.addWidget(self.btn_download_all)
     # --- Checkboxes ---
     self.checkboxes = {}
     checks = [
