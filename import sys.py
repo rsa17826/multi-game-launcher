@@ -881,6 +881,7 @@ class Launcher(QWidget):
     # 2. Setup the Console Widget
     self.console_output = QPlainTextEdit()
     self.console_output.setReadOnly(True)
+    self.console_output.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
     self.console_output.setFixedHeight(28)
     self.is_console_expanded = False
     self.console_output.setStyleSheet(
