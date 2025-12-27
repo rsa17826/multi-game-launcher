@@ -16,12 +16,9 @@ from PySide6.QtWidgets import (
   QLineEdit,
   QLabel,
   QListWidgetItem,
-  QProgressBar,
-  QDialog,
   QSpinBox,
 )
 from PySide6.QtCore import QThread, Signal
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QProgressBar
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import QUrl
 from PySide6.QtCore import QTimer
