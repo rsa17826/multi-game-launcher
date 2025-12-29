@@ -29,6 +29,7 @@ import py7zr
 import re
 from pathlib import Path
 
+
 class f:
   @staticmethod
   def read(
@@ -146,42 +147,70 @@ class f:
     return text
 
 
-OFFLINE = False
-SILENT = False
-ASSET_NAME = "windows.zip"
-GAME_FILE_NAME = "vex.pck"
-VERSIONS_DIR = "versions"
-GAME_LOG_LOCATION = ""
-WINDOW_TITLE = "vex++ launcher"
-MAIN_LOADING_COLOR = (0, 210, 255)
-UNKNOWN_TIME_LOADING_COLOR = (255, 108, 0)
-USE_HARD_LINKS = True
-USE_CENTRAL_GAME_DATA_FOLDER = True
-API_URL = "https://api.github.com/repos/rsa17826/vex-plus-plus/releases"
-
-
 SETTINGS_FILE = "launcher_settings.json"
 
+OFFLINE = False
+SILENT = False
 
-class hooks:
-  @staticmethod
-  def gameVersionExists(full_path):
-    return os.path.isfile(os.path.join(full_path, GAME_FILE_NAME))
+VERSIONS_DIR = "versions"
+MAIN_LOADING_COLOR = (0, 210, 255)
+UNKNOWN_TIME_LOADING_COLOR = (255, 108, 0)
+if 0:
+  WINDOW_TITLE = "vex++ launcher"
+  USE_HARD_LINKS = True
+  USE_CENTRAL_GAME_DATA_FOLDER = True
+  API_URL = "https://api.github.com/repos/rsa17826/vex-plus-plus/releases"
 
-  @staticmethod
-  def gameLaunchRequested(path):
-    exe = os.path.join(path, "vex.exe")
-    if os.path.isfile(exe):
-      subprocess.Popen([exe], cwd=path)
+  class hooks:
+    @staticmethod
+    def getGameLogLocation():
+      """location that the game stores error logs, return "" if the game doesn't generate logs
+      Returns:
+        str
+      """
+      return ""
 
-  @staticmethod
-  def addCustomNodes(_self):
-    pass
+    @staticmethod
+    def getAssetName():
+      """file to download from gh releases eg windows.zip
+      Returns:
+        str
+      """
+      return "windows.zip"
+
+    @staticmethod
+    def gameVersionExists(full_path):
+      """return true if the dir has a valid game version in it
+      Args:
+        full_path (str): path to dir to check
+      Returns:
+        bool: true if the given dir has a valid game in it
+      """
+      return os.path.isfile(os.path.join(full_path, "vex.pck"))
+
+    @staticmethod
+    def gameLaunchRequested(path):
+      """called when the user tries to launch a version of the game
+      this should open the game when called
+      Args:
+        path (str): the path to the game dir
+      """
+      exe = os.path.join(path, "vex.exe")
+      if os.path.isfile(exe):
+        subprocess.Popen([exe], cwd=path)
+
+    @staticmethod
+    def addCustomNodes(_self):
+      """add custom qt nodes to the launcher
+      Args:
+        _self (qt): the main place to add nodes to
+      """
+      pass
 
 
-LOCAL_COLOR = Qt.green
-ONLINE_COLOR = Qt.cyan
-MISSING_COLOR = Qt.gray
+LOCAL_COLOR = Qt.GlobalColor.green
+ONLINE_COLOR = Qt.GlobalColor.cyan
+MISSING_COLOR = Qt.GlobalColor.gray
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel
 from PySide6.QtGui import QPainter, QLinearGradient, QColor
 from PySide6.QtCore import Qt, QRectF
@@ -288,7 +317,7 @@ def add_version_item(list_widget, version, status, path=None, release=None):
   list_widget.setItemWidget(item, widget)
 
   item.setData(
-    Qt.UserRole,
+    Qt.ItemDataRole.UserRole,
     {
       "version": version,
       "status": status,
@@ -421,7 +450,7 @@ class VersionItemWidget(QWidget):
     self.setModeUnknownEnd()
     self.startTime = 0
     self.animSpeed = 10
-    self.setAttribute(Qt.WA_TranslucentBackground)
+    self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
     self.setStyleSheet("background: transparent; border: none;")
 
     self.label = QLabel(text)
@@ -466,7 +495,7 @@ class VersionItemWidget(QWidget):
       return
 
     painter = QPainter(self)
-    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     rect = self.rect()
     w = rect.width()
     h = rect.height()
@@ -546,7 +575,7 @@ class ConsoleRedirector:
 
   def write(self, text):
     # Move cursor to the end so it scrolls automatically
-    self.text_widget.moveCursor(QTextCursor.End)
+    self.text_widget.moveCursor(QTextCursor.MoveOperation.End)
     self.text_widget.insertPlainText(text)
     # Ensure it scrolls to the new text
     self.text_widget.ensureCursorVisible()
@@ -587,7 +616,7 @@ class Launcher(QWidget):
   downloadingVersions = []
 
   def on_version_double_clicked(self, item):
-    data = item.data(Qt.UserRole)
+    data = item.data(Qt.ItemDataRole.UserRole)
     if not data:
       return
 
@@ -604,7 +633,7 @@ class Launcher(QWidget):
       self.start_queued_download_request(item)
 
   def start_queued_download_request(self, item):
-    data = item.data(Qt.UserRole)
+    data = item.data(Qt.ItemDataRole.UserRole)
     tag = data["version"]
 
     if tag in self.downloadingVersions:
@@ -613,7 +642,8 @@ class Launcher(QWidget):
     self.downloadingVersions.append(tag)
     release = data.get("release")
     asset = next(
-      (a for a in release.get("assets", []) if a["name"] == ASSET_NAME), None
+      (a for a in release.get("assets", []) if a["name"] == hooks.getAssetName()),
+      None,
     )
 
     if not asset:
@@ -646,7 +676,7 @@ class Launcher(QWidget):
       self.start_actual_download(*next_dl)
 
   def start_actual_download(self, item, url, out_file, dest_dir):
-    data = item.data(Qt.UserRole)
+    data = item.data(Qt.ItemDataRole.UserRole)
     tag = data["version"]
     widget = data["widget"]
 
@@ -670,7 +700,7 @@ class Launcher(QWidget):
     dl_thread.start()
 
   def download_online_version(self, item, url, out_file, extract_dir):
-    data = item.data(Qt.UserRole)
+    data = item.data(Qt.ItemDataRole.UserRole)
     data["status"] = "Local"
     data["path"] = extract_dir
     widget = data["widget"]
@@ -706,7 +736,7 @@ class Launcher(QWidget):
         deduplicate_with_hardlinks(extract_dir)
       # Update list item as Local
       widget.set_progress(101)
-      item.setData(Qt.UserRole, data)
+      item.setData(Qt.ItemDataRole.UserRole, data)
       widget.set_label_color(LOCAL_COLOR)
       widget.label.setText(f"Run version {data['version']}")
       self.downloadingVersions.remove(data["version"])
@@ -774,7 +804,7 @@ class Launcher(QWidget):
 
     # Collect local versions
     for i in range(self.version_list.count()):
-      data = self.version_list.item(i).data(Qt.UserRole)
+      data = self.version_list.item(i).data(Qt.ItemDataRole.UserRole)
       if data:
         local_versions.add(data["version"])
 
@@ -846,13 +876,17 @@ class Launcher(QWidget):
     if self.is_console_expanded:
       self.console_output.setFixedHeight(28)
       # Hide scrollbar in one-line mode
-      self.console_output.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+      self.console_output.setVerticalScrollBarPolicy(
+        Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+      )
       self.console_toggle_btn.setText("▲")
       self.is_console_expanded = False
     else:
       self.console_output.setFixedHeight(150)
       # Show scrollbar in expanded mode
-      self.console_output.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+      self.console_output.setVerticalScrollBarPolicy(
+        Qt.ScrollBarPolicy.ScrollBarAsNeeded
+      )
       self.console_toggle_btn.setText("▼")
       self.is_console_expanded = True
 
@@ -860,7 +894,7 @@ class Launcher(QWidget):
     online_count = 0
     for i in range(self.version_list.count()):
       item = self.version_list.item(i)
-      data = item.data(Qt.UserRole)
+      data = item.data(Qt.ItemDataRole.UserRole)
 
       # Check if it's Online and not already in the process of downloading
       if data and data.get("status") == "Online":
@@ -913,12 +947,12 @@ class Launcher(QWidget):
 
     temp.clicked.connect(a)
 
-    if GAME_LOG_LOCATION:
+    if hooks.getGameLogLocation():
       temp = QPushButton("open game logs folder")
       btn_row1.addWidget(temp)
 
       def a():
-        path = os.path.abspath(GAME_LOG_LOCATION)
+        path = os.path.abspath(hooks.getGameLogLocation())
         QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
       temp.clicked.connect(a)
@@ -958,7 +992,7 @@ class Launcher(QWidget):
     # Add to save-list so it persists between restarts
     self.widgets_to_save["max_concurrent_dls"] = self.max_dl_spinbox
     self.github_pat = QLineEdit()
-    self.github_pat.setEchoMode(QLineEdit.Password)
+    self.github_pat.setEchoMode(QLineEdit.EchoMode.Password)
     self.github_pat.setPlaceholderText("github pat (optional)")
     main_layout.addWidget(self.github_pat)
     self.widgets_to_save["github_pat"] = self.github_pat
@@ -995,7 +1029,9 @@ class Launcher(QWidget):
     # 2. Setup the Console Widget
     self.console_output = QPlainTextEdit()
     self.console_output.setReadOnly(True)
-    self.console_output.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    self.console_output.setVerticalScrollBarPolicy(
+      Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+    )
     self.console_output.setFixedHeight(28)
     self.is_console_expanded = False
     self.console_output.setStyleSheet(
@@ -1005,7 +1041,7 @@ class Launcher(QWidget):
     # 3. Setup the 1x1 Toggle Button
     self.console_toggle_btn = QPushButton("▲")
     self.console_toggle_btn.setFixedSize(28, 28)
-    self.console_toggle_btn.setCursor(Qt.PointingHandCursor)
+    self.console_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
     self.console_toggle_btn.clicked.connect(self.toggle_console)
 
     # 4. Add widgets with explicit Bottom Alignment
@@ -1013,7 +1049,7 @@ class Launcher(QWidget):
     # but the button must be told to stay down.
     self.console_row_layout.addWidget(self.console_output)
     self.console_row_layout.addWidget(
-      self.console_toggle_btn, alignment=Qt.AlignBottom
+      self.console_toggle_btn, alignment=Qt.AlignmentFlag.AlignBottom
     )
 
     # 5. Add the row to your main layout
