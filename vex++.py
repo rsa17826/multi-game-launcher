@@ -34,13 +34,33 @@ def gameVersionExists(path):
   """
   return os.path.isfile(os.path.join(path, "vex.pck"))
 
+from PySide6.QtWidgets import QCheckBox, QLineEdit, QWidget
 
-def addCustomNodes(_self):
-  """add custom qt nodes to the launcher
-  Args:
-    _self (qt): the main place to add nodes to
+def addCustomNodes(_self, layout) -> dict[str, QWidget]:
   """
-  pass
+  Args:
+    _self: The Launcher instance (to register widgets for saving)
+    layout: The QVBoxLayout of the Local Settings section
+  """
+
+  # 1. Create the Checkbox
+  load_level_cb = QCheckBox("Load Specific Level on Start")
+  layout.addWidget(load_level_cb)
+
+  # 2. Create the Input Box
+  level_name_input = QLineEdit()
+  level_name_input.setPlaceholderText("Enter level name (e.g. Level_01)")
+
+  # Start greyed out (disabled)
+  level_name_input.setEnabled(False)
+  layout.addWidget(level_name_input)
+
+  # 3. Logic: Automatically grey/un-grey the input based on the checkbox
+  # When checkbox is checked (True), setEnabled(True) is called.
+  # When unchecked (False), it becomes greyed out.
+  load_level_cb.toggled.connect(level_name_input.setEnabled)
+
+  return {"cb_load_custom_level":load_level_cb, "input_level_name":level_name_input}
 
 
 import launcher

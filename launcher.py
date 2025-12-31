@@ -979,9 +979,8 @@ def run(config: Config):
 
       # --- 4. MAIN WINDOW SETTINGS BUTTON ---
       self.btn_settings = QPushButton("Settings")
-      self.btn_settings.clicked.connect(self.settings_dialog.show)
+      self.btn_settings.clicked.connect(self.open_settings)
       main_layout.addWidget(self.btn_settings)
-      config.addCustomNodes(self)
 
       # ---- ONLINE FETCH (only if not offline) ----
       self.found_releases = json.loads(
@@ -997,6 +996,19 @@ def run(config: Config):
         self.main_progress_bar.show()
       else:
         self.main_progress_bar.set_progress(101)
+
+    def open_settings(self):
+      # .exec() halts the script here until the dialog is closed
+      result = self.settings_dialog.exec()
+
+      if result == QDialog.DialogCode.Accepted:
+        # User clicked 'Done'
+        print("Saving settings...")
+        self.save_user_settings()
+      else:
+        # User clicked 'Cancel' or closed via 'X'
+        print("Changes discarded. Reverting UI...")
+        self.load_user_settings()
 
     def start_fetch(self, max_pages=1):
       """Standard fetch with a page limit."""
@@ -1158,12 +1170,32 @@ def run(config: Config):
       local_box.setLayout(local_layout)
       outer_layout.addWidget(local_box)
 
-      # Bottom Close Button
-      close_btn = QPushButton("Done")
-      close_btn.clicked.connect(self.settings_dialog.accept)
-      outer_layout.addWidget(close_btn)
+      # --- Bottom Action Buttons ---
+      bottom_btn_layout = QHBoxLayout()
+
+      # Cancel Button: Discards changes and closes
+      cancel_btn = QPushButton("Cancel")
+      cancel_btn.clicked.connect(self.settings_dialog.reject)
+      bottom_btn_layout.addWidget(cancel_btn)
+
+      # Done Button: Saves changes and closes
+      done_btn = QPushButton("Done")
+      done_btn.setDefault(True)  # Pressing Enter triggers this
+      done_btn.clicked.connect(self.settings_dialog.accept)
+      bottom_btn_layout.addWidget(done_btn)
+
+      outer_layout.addLayout(bottom_btn_layout)
+
+      custom_widgets = config.addCustomNodes(self, local_layout)
+
+      # Register them for saving/loading and mark as Local
+      for key, widget in custom_widgets.items():
+        self.widgets_to_save[key] = widget
+        if key not in self.local_keys:
+          self.local_keys.append(key)
 
   app = QApplication(sys.argv)
   window = Launcher()
   window.show()
+
   sys.exit(app.exec())
