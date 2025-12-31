@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Callable
 
+
 @dataclass
 class Config:
   GH_USERNAME: str
@@ -40,6 +41,7 @@ def run(config):
     QListWidgetItem,
     QSpinBox,
     QPlainTextEdit,
+    QDialog,
   )
   from PySide6.QtCore import QThread, Signal
   from PySide6.QtGui import (
@@ -617,6 +619,8 @@ def run(config):
         if path:
           config.gameLaunchRequested(path)
           f.write("./launcherData/lastRanVersion.txt", data.get("version"))
+          # if settings.closeOnGameStart:
+
         return
 
       # Online → download
@@ -748,13 +752,10 @@ def run(config):
       return dl_thread
 
     def update_version_list(self, releases):
-      self.version_list.setUpdatesEnabled(False)
-      scrollbar = self.version_list.verticalScrollBar()
-      previous_scroll_pos = scrollbar.value()
-      # 1. Gather all data into a temporary list first
+      if not self.version_list:
+        return
       all_items_data = []
-
-      # Get local versions from disk
+      local_versions = set()
       if os.path.isdir(VERSIONS_DIR):
         for dirname in os.listdir(VERSIONS_DIR):
           full_path = os.path.join(VERSIONS_DIR, dirname)
@@ -767,12 +768,10 @@ def run(config):
                 "release": None,
               }
             )
-
-      # Add online versions that aren't already local
-      local_names = [d["version"] for d in all_items_data]
+            local_versions.add(dirname)
       for rel in releases:
-        version = rel["tag_name"]
-        if version not in local_names:
+        version = rel.get("tag_name")
+        if version and version not in local_versions:
           all_items_data.append(
             {
               "version": version,
@@ -782,39 +781,59 @@ def run(config):
             }
           )
 
-      # 2. Sort the data using the logic above
       sorted_data = self.sort_versions(all_items_data)
+      self.version_list.setUpdatesEnabled(False)
+      self.version_list.blockSignals(True)
+      try:
+        current_count = self.version_list.count()
+        target_count = len(sorted_data)
+        if current_count < target_count:
+          for _ in range(target_count - current_count):
+            add_version_item(self.version_list, "", "Online")
+        elif current_count > target_count:
+          for _ in range(current_count - target_count):
+            self.version_list.takeItem(self.version_list.count() - 1)
 
-      # 3. Clear and Re-populate the UI
-      self.version_list.clear()
-      for data in sorted_data:
-        add_version_item(
-          self.version_list,
-          data["version"],
-          data["status"],
-          data["path"],
-          data["release"],
-        )
-      local_versions = set()
+        for i, data in enumerate(sorted_data):
+          item = self.version_list.item(i)
+          old_data = item.data(Qt.ItemDataRole.UserRole)
+          if (
+            old_data
+            and old_data.get("version") == data["version"]
+            and old_data.get("status") == data["status"]
+          ):
+            continue
 
-      # Collect local versions
-      for i in range(self.version_list.count()):
-        data = self.version_list.item(i).data(Qt.ItemDataRole.UserRole)
-        if data:
-          local_versions.add(data["version"])
-
-      # Add online versions
-      for rel in releases:
-        version = rel["tag_name"]
-
-        if version in local_versions:
-          continue
-
-        add_version_item(
-          self.version_list, version, status="Online", path=None, release=rel
-        )
-      scrollbar.setValue(previous_scroll_pos)
-      self.version_list.setUpdatesEnabled(True)
+          widget = self.version_list.itemWidget(item)
+          new_text = (
+            f"Run version {data['version']}"
+            if data["status"] == "Local"
+            else f"Download version {data['version']}"
+          )
+          new_color = (
+            LOCAL_COLOR
+            if data["status"] == "Local"
+            else (
+              ONLINE_COLOR
+              if data["status"] == "Online"
+              else MISSING_COLOR
+            )
+          )
+          widget.label.setText(new_text)
+          widget.set_label_color(new_color)
+          if (
+            data["status"] == "Online"
+            and data["version"] not in self.downloadingVersions
+          ):
+            widget.setModeKnownEnd()
+            widget.set_progress(0)
+          data["widget"] = widget
+          item.setData(Qt.ItemDataRole.UserRole, data)
+      except Exception as e:
+        print(f"Update Error: {e}")
+      finally:
+        self.version_list.blockSignals(False)
+        self.version_list.setUpdatesEnabled(True)
 
     def load_local_versions(self):
       self.version_list.clear()
@@ -931,41 +950,14 @@ def run(config):
       main_layout.addWidget(self.version_list)
 
       self.widgets_to_save = {}  # store widgets for saving
+
+      self.settings_dialog = QDialog(self)
+      self.settings_dialog.setWindowTitle("Settings")
+      self.settings_dialog.setFixedWidth(400)
+      settings_layout = QVBoxLayout(self.settings_dialog)
+
       self.main_progress_bar = VersionItemWidget("", MISSING_COLOR)
       main_layout.addWidget(self.main_progress_bar)
-
-      btn_row1 = QHBoxLayout()
-      temp = QPushButton("open launcher log")
-      btn_row1.addWidget(temp)
-
-      def a():
-        path = os.path.abspath("./logs")
-        QDesktopServices.openUrl(QUrl.fromLocalFile(path))
-
-      temp.clicked.connect(a)
-
-      if config.getGameLogLocation():
-        temp = QPushButton("open game logs folder")
-        btn_row1.addWidget(temp)
-
-        def a():
-          path = os.path.abspath(config.getGameLogLocation())
-          QDesktopServices.openUrl(QUrl.fromLocalFile(path))
-
-        temp.clicked.connect(a)
-
-      main_layout.addLayout(btn_row1)
-      btn_row2 = QHBoxLayout()
-      if config.USE_CENTRAL_GAME_DATA_FOLDER:
-        temp = QPushButton("open game data folder")
-
-        def a():
-          path = os.path.abspath("./gameData")
-          QDesktopServices.openUrl(QUrl.fromLocalFile(path))
-
-        temp.clicked.connect(a)
-        btn_row2.addWidget(temp)
-      main_layout.addLayout(btn_row2)
 
       settings_row = QHBoxLayout()
 
@@ -984,37 +976,68 @@ def run(config):
       settings_row.addWidget(self.max_dl_spinbox)
       settings_row.addStretch()  # Push widgets to the left
 
-      main_layout.addLayout(settings_row)
+      # -- Log / Folder Buttons --
+      btn_row1 = QHBoxLayout()
+      temp = QPushButton("open launcher log")
+      temp.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.abspath("./logs"))))
+      btn_row1.addWidget(temp)
+      if config.getGameLogLocation():
+        temp = QPushButton("open game logs folder")
+        temp.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.abspath(config.getGameLogLocation()))))
+        btn_row1.addWidget(temp)
+      settings_layout.addLayout(btn_row1)
 
-      # Add to save-list so it persists between restarts
-      self.widgets_to_save["max_concurrent_dls"] = self.max_dl_spinbox
-      self.github_pat = QLineEdit()
-      self.github_pat.setEchoMode(QLineEdit.EchoMode.Password)
-      self.github_pat.setPlaceholderText("github pat (optional)")
-      main_layout.addWidget(self.github_pat)
-      self.widgets_to_save["github_pat"] = self.github_pat
-
+      btn_row2 = QHBoxLayout()
+      if config.USE_CENTRAL_GAME_DATA_FOLDER:
+        temp = QPushButton("open game data folder")
+        temp.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.abspath("./gameData"))))
+        btn_row2.addWidget(temp)
       self.btn_download_all = QPushButton("Download All Versions")
       self.btn_download_all.clicked.connect(self.download_all_versions)
       btn_row2.addWidget(self.btn_download_all)
-      # --- Checkboxes ---
+      settings_layout.addLayout(btn_row2)
+
+      # -- Max Downloads --
+      max_dl_row = QHBoxLayout()
+      max_dl_label = QLabel("Max Concurrent Downloads:")
+      self.max_dl_spinbox = QSpinBox()
+      self.max_dl_spinbox.setRange(0, 10)
+      self.max_dl_spinbox.setValue(3)
+      self.max_dl_spinbox.setFixedWidth(60)
+      self.max_dl_spinbox.valueChanged.connect(self.process_download_queue)
+      max_dl_row.addWidget(max_dl_label)
+      max_dl_row.addWidget(self.max_dl_spinbox)
+      max_dl_row.addStretch()
+      settings_layout.addLayout(max_dl_row)
+      self.widgets_to_save["max_concurrent_dls"] = self.max_dl_spinbox
+
+      # -- GitHub PAT --
+      self.github_pat = QLineEdit()
+      self.github_pat.setEchoMode(QLineEdit.EchoMode.Password)
+      self.github_pat.setPlaceholderText("github pat (optional)")
+      settings_layout.addWidget(self.github_pat)
+      self.widgets_to_save["github_pat"] = self.github_pat
+
+      # -- Checkboxes --
       self.checkboxes = {}
-      checks = [
-        # "check for updates on boot",
-        # "use xdm",
-        "check for launcher updates when opening",
-        # "open console with game",
-      ]
+      checks = ["check for launcher updates when opening"]
       for text in checks:
         cb = QCheckBox(text)
         cb.setChecked(True)
-        main_layout.addWidget(cb)
+        settings_layout.addWidget(cb)
         self.checkboxes[text] = cb
         self.widgets_to_save[f"cb_{text}"] = cb
+
+      # -- Command Args --
       self.command_input = QLineEdit("")
       self.command_input.setPlaceholderText("game args go here")
-      main_layout.addWidget(self.command_input)
+      settings_layout.addWidget(self.command_input)
       self.widgets_to_save["command_input"] = self.command_input
+
+      # --- 4. MAIN WINDOW SETTINGS BUTTON ---
+      self.btn_settings = QPushButton("Settings")
+      self.btn_settings.clicked.connect(self.settings_dialog.show)
+      main_layout.addWidget(self.btn_settings)
       # Load saved settings
       self.load_user_settings()
       config.addCustomNodes(self)
