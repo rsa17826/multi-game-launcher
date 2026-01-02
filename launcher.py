@@ -51,14 +51,11 @@ def run(config: Config):
     QLabel,
     QListWidgetItem,
     QSpinBox,
-    QPlainTextEdit,
     QDialog,
     QGroupBox,
   )
   from PySide6.QtCore import QThread, Signal
   from PySide6.QtGui import (
-    QDesktopServices,
-    QTextCursor,
     QPainter,
     QLinearGradient,
     QColor,
@@ -162,7 +159,7 @@ def run(config: Config):
 
   os.makedirs("./launcherData", exist_ok=True)
 
-  def get_file_hash(path):
+  def getFileHash(path):
     """Calculate SHA256 hash of a file in chunks to save memory."""
     hasher = hashlib.sha256()
     try:
@@ -173,16 +170,14 @@ def run(config: Config):
     except Exception:
       return None
 
-  def deduplicate_with_hardlinks(new_version_dir):
+  def deduplicateWithHardlinks(new_version_dir):
     if not config.USE_HARD_LINKS:
       return
 
-    # { (size, filename): existing_file_path }
     file_map = {}
 
-    # 1. Map out existing potential "source" files
     for root, dirs, files in os.walk(VERSIONS_DIR):
-      # Skip the new directory
+
       if os.path.abspath(root).startswith(os.path.abspath(new_version_dir)):
         continue
 
@@ -199,33 +194,21 @@ def run(config: Config):
         except OSError:
           continue
 
-    # 2. Process new files
     for root, dirs, files in os.walk(new_version_dir):
       for filename in files:
         new_file_path = os.path.join(root, filename)
         try:
           new_stat = os.stat(new_file_path)
-
-          # If the new file is somehow already a link, skip it
           if new_stat.st_nlink > 1:
             continue
-
           candidates = file_map.get((new_stat.st_size, filename))
-
           if candidates is not None:
             for candidate in candidates:
-              # Final safety check: ensure we aren't linking a file to itself
               if os.path.abspath(new_file_path) == os.path.abspath(
                 candidate
               ):
                 continue
-              # print(
-              #   new_file_path,
-              #   get_file_hash(new_file_path),
-              #   candidate,
-              #   get_file_hash(candidate),
-              # )
-              if get_file_hash(new_file_path) == get_file_hash(candidate):
+              if getFileHash(new_file_path) == getFileHash(candidate):
                 print(f"Hardlinking: {filename} -> {candidate}")
                 os.remove(new_file_path)
                 os.link(candidate, new_file_path)
@@ -233,7 +216,7 @@ def run(config: Config):
           print(f"Error processing {filename}: {e}")
 
   class AssetDownloadThread(QThread):
-    progress = Signal(int)  # percent
+    progress = Signal(int)
     finished = Signal(str)
     error = Signal(str)
 
@@ -262,16 +245,15 @@ def run(config: Config):
       except Exception as e:
         self.error.emit(str(e))
 
-  # ------------------- Release Fetch Thread -------------------
   class ReleaseFetchThread(QThread):
-    progress = Signal(int, int, list)  # current page, total pages
-    finished = Signal(list)  # list of releases
+    progress = Signal(int, int, list)
+    finished = Signal(list)
     error = Signal(str)
 
     def __init__(self, pat=None, max_pages=1):
       super().__init__()
       self.pat = pat
-      self.max_pages = max_pages  # 0 means "All"
+      self.max_pages = max_pages
 
     def run(self):
       if OFFLINE:
@@ -285,7 +267,6 @@ def run(config: Config):
           rand = random.random()
           final_size = -1
 
-          # HEAD request to detect total pages
           head = requests.head(
             f"{API_URL}?page=0&rand={rand}", headers=headers, timeout=10
           )
@@ -297,10 +278,9 @@ def run(config: Config):
             if m:
               final_size = int(m.group(1)) + 1
 
-        # Fetch pages
         while True:
           page += 1
-          # Check if we should stop based on max_pages
+
           if self.max_pages > 0 and page > self.max_pages:
             break
 
@@ -330,7 +310,7 @@ def run(config: Config):
       both = 1
       rightToLeft = 2
 
-    def __init__(self, text="", color=MISSING_COLOR):  # Added color argument
+    def __init__(self, text="", color=MISSING_COLOR):
       super().__init__()
       self.text = text
       self.progress = 0
@@ -341,7 +321,7 @@ def run(config: Config):
       self.setStyleSheet("background: transparent; border: none;")
 
       self.label = QLabel(text)
-      # Convert QColor to hex for stylesheet
+
       color_hex = color.name
       self.label.setStyleSheet(f"background: transparent; color: {color_hex};")
 
@@ -371,17 +351,17 @@ def run(config: Config):
       self.progress = 101
       self.update()
 
-    def set_label_color(self, color):
+    def setLabelColor(self, color):
       self.label.setStyleSheet(f"background: transparent; color: {color.name};")
 
-    def set_progress(self, percent):
+    def setProgress(self, percent):
       if percent == self.progress:
         return
       if self.noKnownEndPoint:
         self.noKnownEndPoint = False
         self.setModeKnownEnd()
       self.progress = percent
-      self.update()  # repaint
+      self.update()
 
     def paintEvent(self, event):
       if not ((0 < self.progress <= 100) or self.noKnownEndPoint):
@@ -393,7 +373,7 @@ def run(config: Config):
       rect = self.rect()
       w = rect.width()
       h = rect.height()
-      gradSize = int(w / 8)  # Slightly smaller grad for 'both' to avoid crowding
+      gradSize = int(w / 8)
       minGradAlpha = 50
       if self.noKnownEndPoint:
         self.progress = int(
@@ -407,8 +387,8 @@ def run(config: Config):
         tip_rect = QRectF(
           solid_rect.right(), 0, int(min(gradSize, fill_end)), h
         )
-        self._draw_progress(painter, solid_rect, minGradAlpha)
-        self._draw_gradient(
+        self._drawProgress(painter, solid_rect, minGradAlpha)
+        self._drawGradient(
           painter,
           tip_rect,
           tip_rect.topLeft(),
@@ -422,8 +402,8 @@ def run(config: Config):
         tip_rect = QRectF(
           int(max(fill_start, 0)), 0, int(min(gradSize, w - fill_start)), h
         )
-        self._draw_progress(painter, solid_rect, minGradAlpha)
-        self._draw_gradient(
+        self._drawProgress(painter, solid_rect, minGradAlpha)
+        self._drawGradient(
           painter,
           tip_rect,
           tip_rect.topRight(),
@@ -435,8 +415,8 @@ def run(config: Config):
         fill_end = w * self.progress / 100
         solid_rect = QRectF(0, 0, max(0, fill_end - gradSize), h)
         tip_rect = QRectF(solid_rect.right(), 0, min(gradSize, fill_end), h)
-        self._draw_progress(painter, solid_rect, minGradAlpha)
-        self._draw_gradient(
+        self._drawProgress(painter, solid_rect, minGradAlpha)
+        self._drawGradient(
           painter,
           tip_rect,
           tip_rect.topLeft(),
@@ -452,8 +432,8 @@ def run(config: Config):
         tip_rect = QRectF(
           max(fill_start, 0), 0, min(gradSize, w - fill_start), h
         )
-        self._draw_progress(painter, solid_rect, minGradAlpha)
-        self._draw_gradient(
+        self._drawProgress(painter, solid_rect, minGradAlpha)
+        self._drawGradient(
           painter,
           tip_rect,
           tip_rect.topRight(),
@@ -463,12 +443,12 @@ def run(config: Config):
 
       super().paintEvent(event)
 
-    def _draw_progress(self, painter, rect, alpha):
+    def _drawProgress(self, painter, rect, alpha):
       if rect.width() <= 0:
         return
       painter.fillRect(rect, QColor(*self.progressColor, alpha))
 
-    def _draw_gradient(self, painter, rect, start_pt, end_pt, min_alpha):
+    def _drawGradient(self, painter, rect, start_pt, end_pt, min_alpha):
       if rect.width() <= 0:
         return
       grad = QLinearGradient(start_pt, end_pt)
@@ -483,18 +463,15 @@ def run(config: Config):
 
   class SettingsData:
     """A container for dot-notation access to settings."""
-
     def __getattr__(self, name) -> Any:
-      # Fallback to None if a setting doesn't exist to prevent crashes
       return None
 
   class Launcher(QWidget):
-    def add_version_item(
+    def addVersionItem(
       self, version: str, status: Statuses, path=None, release=None
     ):
       item = QListWidgetItem()
 
-      # Determine color based on status
       if status == Statuses.local:
         color = LOCAL_COLOR
       elif status == Statuses.online:
@@ -508,7 +485,6 @@ def run(config: Config):
         else f"Download version {version}"
       )
 
-      # Pass the color to the widget
       widget = VersionItemWidget(text, color)
       widget.setModeKnownEnd()
 
@@ -526,13 +502,11 @@ def run(config: Config):
         },
       )
 
-    # region settings
-    def save_user_settings(self):
+    def saveUserSettings(self):
       local_data = {}
       global_data = {}
 
       for key, widget in self.widgets_to_save.items():
-        # Determine value based on widget type
         if isinstance(widget, QLineEdit):
           value = widget.text()
         elif isinstance(widget, QCheckBox):
@@ -542,13 +516,11 @@ def run(config: Config):
         else:
           continue
 
-        # Sort into appropriate bucket
         if key in self.local_keys:
           local_data[key] = value
         else:
           global_data[key] = value
 
-      # Save to separate files
       try:
         with open(self.local_settings_file, "w", encoding="utf-8") as f:
           json.dump(local_data, f, indent=2)
@@ -557,8 +529,7 @@ def run(config: Config):
       except Exception as e:
         print(f"Failed to save settings: {e}")
 
-    def load_user_settings(self):
-      # Load both files
+    def loadUserSettings(self):
       local_data = {}
       global_data = {}
 
@@ -572,7 +543,6 @@ def run(config: Config):
       except Exception as e:
         print(f"Failed to load settings: {e}")
 
-      # Combine for easy application
       combined = {**global_data, **local_data}
 
       for key, value in combined.items():
@@ -585,22 +555,17 @@ def run(config: Config):
           elif isinstance(widget, QSpinBox):
             widget.setValue(int(value))
 
-    # endregion
-    # region ignore
     def closeEvent(self, event):
-      self.save_user_settings()
+      self.saveUserSettings()
       super().closeEvent(event)
 
-    # endregion
     downloadingVersions = []
 
-    # region download
-    def on_version_double_clicked(self, item):
+    def onVersionDoubleClicked(self, item):
       data = item.data(Qt.ItemDataRole.UserRole)
       if not data:
         return
 
-      # Local → run
       if data["status"] == Statuses.local:
         path = data.get("path")
         if path:
@@ -609,83 +574,79 @@ def run(config: Config):
             os.path.join(GAME_ID, "launcherData/lastRanVersion.txt"),
             data.get("version"),
           )
-          # if settings.closeOnGameStart:
 
         return
 
-      # Online → download
       if data["status"] == Statuses.online:
-        self.start_queued_download_request(item)
+        self.startQueuedDownloadRequest(item)
 
-    def start_queued_download_request(self, item):
-      data = item.data(Qt.ItemDataRole.UserRole)
-      tag = data["version"]
+    def startQueuedDownloadRequest(self, *items):
+      for item in items:
+        data = item.data(Qt.ItemDataRole.UserRole)
+        tag = data["version"]
 
-      if tag in self.downloadingVersions:
-        return
+        if tag in self.downloadingVersions:
+          return
 
-      self.downloadingVersions.append(tag)
-      release = data.get("release")
-      asset = next(
-        (
-          a
-          for a in release.get("assets", [])
-          if a["name"] == config.getAssetName()
-        ),
-        None,
-      )
+        self.downloadingVersions.append(tag)
+        release = data.get("release")
+        asset = next(
+          (
+            a
+            for a in release.get("assets", [])
+            if a["name"] == config.getAssetName()
+          ),
+          None,
+        )
 
-      if not asset:
-        print(f"Asset not found for {tag}")
-        self.downloadingVersions.remove(tag)
-        return
+        if not asset:
+          print(f"Asset not found for {tag}")
+          self.downloadingVersions.remove(tag)
+          return
 
-      dest_dir = os.path.join(VERSIONS_DIR, tag)
-      out_file = os.path.join(dest_dir, asset["name"])
+        dest_dir = os.path.join(VERSIONS_DIR, tag)
+        out_file = os.path.join(dest_dir, asset["name"])
 
-      # UI state: Waiting (Orange Pulse)
-      widget = self.active_item_refs[data['version']]
-      assert isinstance(widget, VersionItemWidget)
-      widget.label.setText(f"Waiting: {tag}")
-      widget.setModeUnknownEnd()
+        widget = self.active_item_refs[data["version"]]
+        assert isinstance(widget, VersionItemWidget)
+        widget.label.setText(f"Waiting: {tag}")
+        widget.setModeUnknownEnd()
 
-      # Add to queue and process
-      self.download_queue.append(
-        (item.data(Qt.ItemDataRole.UserRole)['version'], asset["browser_download_url"], out_file, dest_dir)
-      )
-      self.process_download_queue()
+        self.download_queue.append(
+          (
+            item.data(Qt.ItemDataRole.UserRole)["version"],
+            asset["browser_download_url"],
+            out_file,
+            dest_dir,
+          )
+        )
+      self.processDownloadQueue()
 
-    def process_download_queue(self):
-      # While we have room for more downloads and items in the queue
+    def processDownloadQueue(self):
       assert isinstance(self.settings.max_concurrent_dls, int)
       while self.download_queue and (
         len(self.active_downloads) < self.settings.max_concurrent_dls
         or self.settings.max_concurrent_dls == 0
       ):
         next_dl = self.download_queue.pop(0)
-        self.start_actual_download(*next_dl)
-      print(self.downloadingVersions)
-      self.update_version_list()
-      QTimer.singleShot(0, lambda: QTimer.singleShot(0, self.update_version_list))
+        self.startActualDownload(*next_dl)
+      # print(self.downloadingVersions)
+      self.updateVersionList()
 
-    def start_actual_download(self, tag, url, out_file, dest_dir):
+    def startActualDownload(self, tag, url, out_file, dest_dir):
       print(url)
       os.makedirs(dest_dir, exist_ok=True)
 
-      # 1. Create the thread
       dl_thread = AssetDownloadThread(url, out_file)
-      # Store a strong reference to prevent garbage collection
+
       self.active_downloads[tag] = dl_thread
 
-      def on_finished(path):
-        # Move cleanup to the start of the finish logic
-        self.process_download_queue()
-
-        # Find the CURRENT item reference (it may have moved due to sorting)
+      def onFinished(path):
+        self.processDownloadQueue()
         current_widget = self.active_item_refs.get(tag)
         assert isinstance(current_widget, VersionItemWidget)
         current_widget.label.setText(f"Extracting {tag}...")
-        current_widget.setModeUnknownEnd()  # Pulse while unzipping
+        current_widget.setModeUnknownEnd()
 
         extracted = False
         try:
@@ -701,41 +662,36 @@ def run(config: Config):
             extracted = True
 
           if extracted and config.USE_HARD_LINKS:
-            deduplicate_with_hardlinks(dest_dir)
+            deduplicateWithHardlinks(dest_dir)
         except Exception as e:
           print(f"Extraction error for {tag}: {e}")
 
-        # Cleanup tracking lists
         if tag in self.downloadingVersions:
           self.downloadingVersions.remove(tag)
 
-        # 2. Finalize UI
         if extracted:
           print(f"Finished processing {tag}")
           self.active_downloads.pop(tag, None)
           assert isinstance(current_widget, VersionItemWidget)
-          self.process_download_queue()
+          self.processDownloadQueue()
         else:
           self.active_downloads.pop(tag, None)
 
-      # Connect signals
-      dl_thread.progress.connect(bind(self.handle_download_progress, tag))
-      dl_thread.finished.connect(on_finished)
+      dl_thread.progress.connect(bind(self.handleDownloadProgress, tag))
+      dl_thread.finished.connect(onFinished)
       dl_thread.error.connect(lambda e: print(f"DL Error {tag}: {e}"))
 
-      # Ensure thread deletes itself properly
       dl_thread.finished.connect(dl_thread.deleteLater)
 
       dl_thread.start()
 
-    def handle_download_progress(self, version_tag, percentage):
+    def handleDownloadProgress(self, version_tag, percentage):
       widget = self.active_item_refs.get(version_tag)
       assert isinstance(widget, VersionItemWidget)
-      widget.set_progress(percentage)
+      widget.setProgress(percentage)
       widget.label.setText(f"Downloading {version_tag}... ({percentage}%)")
 
-    # endregion
-    def update_version_list(self):
+    def updateVersionList(self):
       if not self.version_list:
         return
       f.write(
@@ -769,7 +725,7 @@ def run(config: Config):
             }
           )
 
-      sorted_data = self.sort_versions(all_items_data)
+      sorted_data = self.sortVersions(all_items_data)
       self.version_list.setUpdatesEnabled(False)
       self.version_list.blockSignals(True)
       try:
@@ -778,7 +734,7 @@ def run(config: Config):
         target_count = len(sorted_data)
         if current_count < target_count:
           for _ in range(target_count - current_count):
-            self.add_version_item(version="loading", status=Statuses.online)
+            self.addVersionItem(version="loading", status=Statuses.online)
         elif current_count > target_count:
           for _ in range(current_count - target_count):
             self.version_list.takeItem(self.version_list.count() - 1)
@@ -806,14 +762,14 @@ def run(config: Config):
               new_color = ONLINE_COLOR
             case _:
               new_color = MISSING_COLOR
-          widget.set_label_color(new_color)
+          widget.setLabelColor(new_color)
           item.setData(Qt.ItemDataRole.UserRole, data)
       except Exception as e:
         print(f"Update Error: {e}")
       self.version_list.blockSignals(False)
       self.version_list.setUpdatesEnabled(True)
 
-    def load_local_versions(self):
+    def loadLocalVersions(self):
       self.version_list.clear()
 
       if not os.path.isdir(VERSIONS_DIR):
@@ -827,36 +783,27 @@ def run(config: Config):
         if not config.gameVersionExists(full_path):
           continue
 
-        self.add_version_item(
+        self.addVersionItem(
           version=dirname, status=Statuses.local, path=full_path
         )
 
-    def sort_versions(self, versions_data):
-      # 1. Load the last ran version
+    def sortVersions(self, versions_data):
+
       last_ran = f.read(
         os.path.join(GAME_ID, "launcherData/lastRanVersion.txt")
       ).strip()
 
-      def get_sort_key(item):
+      def getSortKey(item):
         version = item["version"]
         status = item["status"]
 
-        # Priority 2: Local Status
-        # (Assuming Statuses.local in your Python code corresponds to "LocalOnly")
         is_local = 1 if status == Statuses.local else 0
 
-        # Priority 1: Last Ran Version
         is_last_ran = 1 if version == last_ran and is_local else 0
-
-        # Priority 3: Numeric vs String versioning
-        # We use a tuple for the key. Python sorts tuples element by element.
-        # Since you .Reverse() at the end, we'll keep values positive
-        # and use reverse=True in the sort() call.
 
         version_is_numeric = 1 if re.match(r"^\d+$", version) else 0
         numeric_value = int(version) if version_is_numeric else 0
 
-        # The key returns: (IsLastRan, IsLocal, IsNumeric, Value/String)
         return (
           is_last_ran,
           (1 if (version in self.downloadingVersions) else 0),
@@ -865,23 +812,22 @@ def run(config: Config):
           numeric_value if version_is_numeric else version,
         )
 
-      versions_data.sort(key=get_sort_key, reverse=True)
-      # versions_data.sort(key=get_sort_key, reverse=False)
+      versions_data.sort(key=getSortKey, reverse=True)
+
       return versions_data
 
-    def download_all_versions(self):
+    def downloadAllVersions(self):
       online_count = 0
       for i in range(self.version_list.count()):
         item = self.version_list.item(i)
         data = item.data(Qt.ItemDataRole.UserRole)
-
-        # Check if it's Online and not already in the process of downloading
+        items = []
         if data and data.get("status") == Statuses.online:
           version = data.get("version")
           if version not in self.downloadingVersions:
-            # We reuse the logic from on_version_double_clicked
-            self.start_queued_download_request(item)
+            items.append(item)
             online_count += 1
+        self.startQueuedDownloadRequest(*items)
 
       if online_count > 0:
         print(f"Added {online_count} versions to the download queue.")
@@ -892,9 +838,9 @@ def run(config: Config):
       super().__init__()
       self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
       self.settings = SettingsData()
-      self.active_item_refs = {}  # Key: version_tag, Value: QListWidgetItem
-      self.active_downloads = {}  # {version_tag: thread_object}
-      self.download_queue = []  # List of (item, url, out_file, extract_dir)
+      self.active_item_refs = {}
+      self.active_downloads = {}
+      self.download_queue = []
       self.setWindowTitle(config.WINDOW_TITLE)
       self.setFixedSize(420, 600)
       self.setStyleSheet(f.read("./main.css"))
@@ -915,9 +861,8 @@ def run(config: Config):
 
       main_layout = QVBoxLayout(self)
 
-      # Version list
       self.version_list = QListWidget()
-      self.load_local_versions()
+      self.loadLocalVersions()
 
       main_layout.addWidget(self.version_list)
       if OFFLINE:
@@ -925,53 +870,46 @@ def run(config: Config):
         offline_label.setStyleSheet("color: orange; font-weight: bold;")
         main_layout.addWidget(offline_label)
 
-      self.version_list.itemDoubleClicked.connect(self.on_version_double_clicked)
+      self.version_list.itemDoubleClicked.connect(self.onVersionDoubleClicked)
 
       main_layout.addWidget(self.version_list)
 
-      self.widgets_to_save = {}  # store widgets for saving
+      self.widgets_to_save = {}
 
       self.main_progress_bar = VersionItemWidget("", MISSING_COLOR)
       main_layout.addWidget(self.main_progress_bar)
 
-      # Load saved settings
-      self.setup_settings_dialog()
-      self.load_user_settings()
+      self.setupSettingsDialog()
+      self.loadUserSettings()
 
-      # --- 4. MAIN WINDOW SETTINGS BUTTON ---
       self.btn_settings = QPushButton("Settings")
-      self.btn_settings.clicked.connect(self.open_settings)
+      self.btn_settings.clicked.connect(self.openSettings)
       main_layout.addWidget(self.btn_settings)
 
-      # ---- ONLINE FETCH (only if not offline) ----
       self.found_releases = json.loads(
         f.read(os.path.join(GAME_ID, "launcherData/cache/releases.json"), "[]")
       )
-      self.update_version_list()
+      self.updateVersionList()
       if not OFFLINE and self.settings.fetch_on_load:
-        self.start_fetch(max_pages=self.settings.max_pages_on_load)
+        self.startFetch(max_pages=self.settings.max_pages_on_load)
         self.release_thread.error.connect(
           lambda e: print("Release fetch error:", e)
         )
         self.release_thread.start()
         self.main_progress_bar.show()
       else:
-        self.main_progress_bar.set_progress(101)
+        self.main_progress_bar.setProgress(101)
 
-    def open_settings(self):
-      # .exec() halts the script here until the dialog is closed
+    def openSettings(self):
       result = self.settings_dialog.exec()
-
       if result == QDialog.DialogCode.Accepted:
-        # User clicked 'Done'
         print("Saving settings...")
-        self.save_user_settings()
+        self.saveUserSettings()
       else:
-        # User clicked 'Cancel' or closed via 'X'
         print("Changes discarded. Reverting UI...")
-        self.load_user_settings()
+        self.loadUserSettings()
 
-    def start_fetch(self, max_pages=1):
+    def startFetch(self, max_pages=1):
       """Standard fetch with a page limit."""
       if hasattr(self, "release_thread") and self.release_thread.isRunning():
         return
@@ -981,7 +919,7 @@ def run(config: Config):
       )
       if max_pages:
         self.main_progress_bar.setModeKnownEnd()
-        self.main_progress_bar.set_progress((0 / max_pages) * 100)
+        self.main_progress_bar.setProgress((0 / max_pages) * 100)
       else:
         self.main_progress_bar.setModeUnknownEnd()
       if max_pages:
@@ -990,54 +928,50 @@ def run(config: Config):
         )
       else:
         self.main_progress_bar.label.setText(f"Fetching page count...")
-      self.release_thread.progress.connect(self.on_release_progress)
-      self.release_thread.finished.connect(self.on_release_finished)
+      self.release_thread.progress.connect(self.onReleaseProgress)
+      self.release_thread.finished.connect(self.onReleaseFinished)
       self.release_thread.start()
 
-    def merge_releases(self, existing, new_data):
-      # Use a dictionary to handle the "replace=True" logic by 'tag_name'
-      # Dictionary keys are unique, so setting a key again replaces the value
+    def mergeReleases(self, existing, new_data):
+
       merged = {rel["tag_name"]: rel for rel in existing}
 
       for rel in new_data:
         tag = rel.get("tag_name")
         if tag:
-          merged[tag] = rel  # This adds new ones OR replaces existing ones
+          merged[tag] = rel
 
-      # Return as a sorted list (usually you want newest at the top)
       return list(merged.values())
 
-    def start_full_fetch(self):
+    def startFullFetch(self):
       """Triggered by button to fetch everything."""
       print("Starting full release fetch...")
-      self.start_fetch(max_pages=0)  # 0 signals 'All' in our thread logic
+      self.startFetch(max_pages=0)
 
-    def on_release_progress(self, page, total, releases):
+    def onReleaseProgress(self, page, total, releases):
       self.main_progress_bar.setModeKnownEnd()
-      self.main_progress_bar.set_progress((page / total) * 100)
-      self.found_releases = self.merge_releases(self.found_releases, releases)
+      self.main_progress_bar.setProgress((page / total) * 100)
+      self.found_releases = self.mergeReleases(self.found_releases, releases)
       self.main_progress_bar.label.setText(
         f"Fetching {total} page(s)... {(page / total) * 100}% - {page} / {total}"
       )
-      self.update_version_list()
+      self.updateVersionList()
 
-    def on_release_finished(self, releases):
+    def onReleaseFinished(self, releases):
       self.main_progress_bar.label.setText("")
-      self.main_progress_bar.set_progress(101)
-      self.found_releases = self.merge_releases(self.found_releases, releases)
-      self.update_version_list()
+      self.main_progress_bar.setProgress(101)
+      self.found_releases = self.mergeReleases(self.found_releases, releases)
+      self.updateVersionList()
 
-    def setup_settings_dialog(self):
+    def setupSettingsDialog(self):
       self.settings_dialog = QDialog(self)
       self.settings_dialog.setWindowTitle("Settings")
       self.settings_dialog.setFixedWidth(420)
       outer_layout = QVBoxLayout(self.settings_dialog)
 
-      # --- GLOBAL SETTINGS SECTION ---
       global_box = QGroupBox("Global Settings (All Games)")
       global_layout = QVBoxLayout()
 
-      # Max Downloads (Using new helper)
       global_layout.addLayout(
         self.newRow(
           "Max Concurrent Downloads:",
@@ -1045,7 +979,6 @@ def run(config: Config):
         )
       )
 
-      # Fetch on Load
       global_layout.addWidget(
         self.newCheckbox(
           "Fetch releases on launcher start", True, "fetch_on_load"
@@ -1059,19 +992,24 @@ def run(config: Config):
         )
       )
 
-      # Fetch Actions Row
       fetch_btn_row = QHBoxLayout()
       assert isinstance(self.settings.max_pages_on_load, int)
       fetch_btn_row.addWidget(
         self.newButton(
           "Fetch Recent Updates",
-          lambda: self.start_fetch(max_pages=self.settings.max_pages_on_load),
+          lambda: self.startFetch(max_pages=self.settings.max_pages_on_load),
         )
       )
       fetch_btn_row.addWidget(
-        self.newButton("Sync Full History", self.start_full_fetch)
+        self.newButton("Sync Full History", self.startFullFetch)
       )
       global_layout.addLayout(fetch_btn_row)
+      global_layout.addWidget(
+        self.newButton(
+          "download all game versions (may hang for a bit)",
+          self.downloadAllVersions,
+        )
+      )
 
       global_layout.addLayout(
         self.newRow(
@@ -1085,11 +1023,9 @@ def run(config: Config):
       global_box.setLayout(global_layout)
       outer_layout.addWidget(global_box)
 
-      # --- LOCAL SETTINGS SECTION ---
       local_box = QGroupBox(f"Local Settings ({config.GH_REPO})")
       local_layout = QVBoxLayout()
 
-      # Extra Args
       local_layout.addLayout(
         self.newRow(
           "Extra Game Args:",
@@ -1097,7 +1033,6 @@ def run(config: Config):
         )
       )
 
-      # Custom Nodes Injection
       if config.addCustomNodes:
         custom_widgets = config.addCustomNodes(self, local_layout)
         if custom_widgets:
@@ -1109,7 +1044,6 @@ def run(config: Config):
       local_box.setLayout(local_layout)
       outer_layout.addWidget(local_box)
 
-      # --- BOTTOM ACTION BUTTONS ---
       bottom_btn_layout = QHBoxLayout()
       cancel_btn = QPushButton("Cancel")
       cancel_btn.clicked.connect(self.settings_dialog.reject)
@@ -1127,9 +1061,8 @@ def run(config: Config):
       node.setValue(default)
       node.setFixedWidth(width)
 
-      # Link to the settings object: updates whenever the value changes
       node.valueChanged.connect(lambda v: setattr(self.settings, saveId, v))
-      # Set initial value
+
       setattr(self.settings, saveId, default)
 
       self.widgets_to_save[saveId] = node
@@ -1158,7 +1091,6 @@ def run(config: Config):
       if onChange:
         node.toggled.connect(onChange)
 
-      # Link to the settings object
       node.toggled.connect(lambda v: setattr(self.settings, saveId, v))
       setattr(self.settings, saveId, default)
 
@@ -1171,7 +1103,6 @@ def run(config: Config):
       if password:
         node.setEchoMode(QLineEdit.EchoMode.Password)
 
-      # Link to the settings object
       node.textChanged.connect(lambda v: setattr(self.settings, saveId, v))
       setattr(self.settings, saveId, "")
 
