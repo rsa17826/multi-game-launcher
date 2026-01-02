@@ -28,8 +28,8 @@ from enum import Enum
 class Statuses(Enum):
   local = 0
   online = 1
-  downloading = 2
-  waitingForDownload = 3
+  # downloading = 2
+  # waitingForDownload = 3
 
 
 def run(config: Config):
