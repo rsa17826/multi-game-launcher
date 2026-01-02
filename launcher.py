@@ -580,13 +580,11 @@ def run(config: Config):
         return
 
       if data["status"] == Statuses.online:
-        self.startQueuedDownloadRequest(item)
+        self.startQueuedDownloadRequest(item.data(Qt.ItemDataRole.UserRole))
 
-    def startQueuedDownloadRequest(self, *items):
-      for item in items:
-        data = item.data(Qt.ItemDataRole.UserRole)
-        tag = data["version"]
-
+    def startQueuedDownloadRequest(self, *versions):
+      for data in versions:
+        tag = data['version']
         if tag in self.downloadingVersions:
           return
 
@@ -602,7 +600,7 @@ def run(config: Config):
         )
 
         if not asset:
-          print(f"Asset not found for {tag}")
+          print(f"Asset Not Found for {tag}")
           self.downloadingVersions.remove(tag)
           return
 
@@ -611,12 +609,11 @@ def run(config: Config):
 
         widget = self.activeItemRefs[data["version"]]
         assert isinstance(widget, VersionItemWidget)
-        widget.label.setText(f"Waiting: {tag}")
         widget.setModeUnknownEnd()
 
         self.downloadQueue.append(
           (
-            item.data(Qt.ItemDataRole.UserRole)["version"],
+            tag,
             asset["browser_download_url"],
             out_file,
             dest_dir,
@@ -632,11 +629,11 @@ def run(config: Config):
       ):
         next_dl = self.downloadQueue.pop(0)
         self.startActualDownload(*next_dl)
-      # print(self.downloadingVersions)
+      print(self.downloadingVersions)
       self.updateVersionList()
 
     def startActualDownload(self, tag, url, out_file, dest_dir):
-      print(url)
+      print(url, tag)
       os.makedirs(dest_dir, exist_ok=True)
 
       dl_thread = AssetDownloadThread(url, out_file)
@@ -666,13 +663,13 @@ def run(config: Config):
           if extracted and config.USE_HARD_LINKS:
             deduplicateWithHardlinks(dest_dir)
         except Exception as e:
-          print(f"Extraction error for {tag}: {e}")
+          print(f"Extraction Error For {tag}: {e}")
 
         if tag in self.downloadingVersions:
           self.downloadingVersions.remove(tag)
 
         if extracted:
-          print(f"Finished processing {tag}")
+          print(f"Finished Processing {tag}")
           self.activeDownloads.pop(tag, None)
           assert isinstance(current_widget, VersionItemWidget)
           self.processDownloadQueue()
@@ -750,6 +747,7 @@ def run(config: Config):
           if data["version"] in self.downloadingVersions:
             if not widget.noKnownEndPoint:
               widget.setModeUnknownEnd()
+            widget.label.setText(f"Waiting To Download: {data['version']}")
           else:
             widget.setModeDisabled()
             widget.label.setText(
@@ -819,7 +817,7 @@ def run(config: Config):
       return versions_data
 
     def downloadAllVersions(self):
-      online_count = 0
+      onlineCount = 0
       for i in range(self.versionList.count()):
         item = self.versionList.item(i)
         data = item.data(Qt.ItemDataRole.UserRole)
@@ -827,14 +825,14 @@ def run(config: Config):
         if data and data.get("status") == Statuses.online:
           version = data.get("version")
           if version not in self.downloadingVersions:
-            items.append(item)
-            online_count += 1
+            items.append(item.data(Qt.ItemDataRole.UserRole))
+            onlineCount += 1
         self.startQueuedDownloadRequest(*items)
 
-      if online_count > 0:
-        print(f"Added {online_count} versions to the download queue.")
+      if onlineCount > 0:
+        print(f"Added {onlineCount} Versions to the Download Queue.")
       else:
-        print("No new online versions found to download.")
+        print("No New Online Versions Found to Download.")
 
     def __init__(self):
       super().__init__()
@@ -846,7 +844,7 @@ def run(config: Config):
       self.setWindowTitle(config.WINDOW_TITLE)
       self.setFixedSize(420, 600)
       self.setStyleSheet(f.read("./main.css"))
-      self.localKeys = ["extra_game_args"]
+      self.localKeys = ["extraGameArgs"]
 
       self.GLOBAL_SETTINGS_FILE = "./launcherData/launcherSettings.json"
       self.LOCAL_SETTINGS_FILE = os.path.join(
@@ -906,7 +904,9 @@ def run(config: Config):
 
     def startFetch(self, max_pages=1):
       """Standard fetch with a page limit."""
-      if hasattr(self, "release_thread") and self.releaseFetchingThread.isRunning():
+      if (
+        self.releaseFetchingThread.isRunning()
+      ):
         return
 
       self.releaseFetchingThread = ReleaseFetchThread(
@@ -919,10 +919,10 @@ def run(config: Config):
         self.mainProgressBar.setModeUnknownEnd()
       if max_pages:
         self.mainProgressBar.label.setText(
-          f"Fetching {max_pages} page{'s' if max_pages==1 else ''}..."
+          f"Fetching {max_pages} Page{'' if max_pages==1 else 's'}..."
         )
       else:
-        self.mainProgressBar.label.setText(f"Fetching page count...")
+        self.mainProgressBar.label.setText(f"Fetching Page Count...")
       self.releaseFetchingThread.progress.connect(self.onReleaseProgress)
       self.releaseFetchingThread.finished.connect(self.onReleaseFinished)
       self.releaseFetchingThread.start()
@@ -940,7 +940,7 @@ def run(config: Config):
 
     def startFullFetch(self):
       """Triggered by button to fetch everything."""
-      print("Starting full release fetch...")
+      print("Starting Full Release Fetch...")
       self.startFetch(max_pages=0)
 
     def onReleaseProgress(self, page, total, releases):
@@ -948,7 +948,7 @@ def run(config: Config):
       self.mainProgressBar.setProgress((page / total) * 100)
       self.foundReleases = self.mergeReleases(self.foundReleases, releases)
       self.mainProgressBar.label.setText(
-        f"Fetching {total} page(s)... {(page / total) * 100}% - {page} / {total}"
+        f"Fetching {total} Page{'' if total==1 else 's'}... {(page / total) * 100}% - {page} / {total}"
       )
       self.updateVersionList()
 
@@ -976,20 +976,20 @@ def run(config: Config):
 
       global_layout.addWidget(
         self.newCheckbox(
-          "check for launcher updates when opening",
+          "Check for Launcher Updates when Opening",
           False,
           "checkForLauncherUpdatesWhenOpening",
         )
       )
       global_layout.addWidget(
         self.newCheckbox(
-          "Fetch releases on launcher start", True, "fetchOnLoad"
+          "Fetch Releases on Launcher Start", True, "fetchOnLoad"
         )
       )
 
       global_layout.addLayout(
         self.newRow(
-          "Max pages to fetch:",
+          "Max Pages to Fetch:",
           self.newSpinBox(0, 100, 1, "maxPagesOnLoad"),
         )
       )
@@ -1008,12 +1008,16 @@ def run(config: Config):
       global_layout.addLayout(fetch_btn_row)
       global_layout.addWidget(
         self.newButton(
-          "download all game versions (may hang for a bit)",
+          "Download All Game Versions (May Hang for a Bit)",
           self.downloadAllVersions,
         )
       )
       global_layout.addWidget(
-        self.newCheckbox("Close launcher on game start", False, "closeOnLaunch")
+        self.newCheckbox(
+          "Close Launcher on Game Start (May Cause some Games to Not Start)",
+          False,
+          "closeOnLaunch",
+        )
       )
       global_layout.addLayout(
         self.newRow(
@@ -1033,7 +1037,7 @@ def run(config: Config):
       local_layout.addLayout(
         self.newRow(
           "Extra Game Args:",
-          self.newLineEdit("Extra Game Args", "extra_game_args"),
+          self.newLineEdit("Extra Game Args", "extraGameArgs"),
         )
       )
 

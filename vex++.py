@@ -15,6 +15,9 @@ def gameLaunchRequested(path):
   exe = os.path.join(path, "vex.exe")
   if os.path.isfile(exe):
     subprocess.Popen([exe], cwd=path)
+  exe = os.path.join(path, "windows/vex.exe")
+  if os.path.isfile(exe):
+    subprocess.Popen([exe], cwd=path)
 
 
 def getAssetName():
