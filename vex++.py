@@ -34,7 +34,9 @@ def gameVersionExists(path):
   """
   return os.path.isfile(os.path.join(path, "vex.pck"))
 
+
 from PySide6.QtWidgets import QWidget
+
 
 def addCustomNodes(_self, layout) -> dict[str, QWidget]:
   """
@@ -43,10 +45,19 @@ def addCustomNodes(_self, layout) -> dict[str, QWidget]:
     layout: The QVBoxLayout of the Local Settings section
   """
 
-  level_name_input = _self.newLineEdit('Enter level name (e.g. Level_01)', 'input_level_name')
-  layout.addWidget(_self.newCheckbox("Load Specific Level on Start", False, 'cb_load_custom_level', onChange=level_name_input.setEnabled))
-  level_name_input.setEnabled(_self.settings.loadCustomLevel)
-  layout.addWidget(level_name_input)
+  levelNameInput = _self.newLineEdit(
+    "Enter level name (e.g. Level_01)", "inputLevelName"
+  )
+  layout.addWidget(
+    _self.newCheckbox(
+      "Load Specific Level on Start",
+      False,
+      "loadCustomLevel",
+      onChange=levelNameInput.setEnabled,
+    )
+  )
+  levelNameInput.setEnabled(_self.settings.loadCustomLevel)
+  layout.addWidget(levelNameInput)
 
   return {}
 

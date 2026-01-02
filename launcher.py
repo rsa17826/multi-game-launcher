@@ -253,7 +253,7 @@ def run(config: Config):
     def __init__(self, pat=None, max_pages=1):
       super().__init__()
       self.pat = pat
-      self.max_pages = max_pages
+      self.maxPages = max_pages
 
     def run(self):
       if OFFLINE:
@@ -263,7 +263,7 @@ def run(config: Config):
         releases = []
         headers = {"Authorization": f"token {self.pat}"} if self.pat else {}
         page = 0
-        if self.max_pages == 0:
+        if self.maxPages == 0:
           rand = random.random()
           final_size = -1
 
@@ -281,7 +281,7 @@ def run(config: Config):
         while True:
           page += 1
 
-          if self.max_pages > 0 and page > self.max_pages:
+          if self.maxPages > 0 and page > self.maxPages:
             break
 
           r = requests.get(
@@ -296,7 +296,7 @@ def run(config: Config):
           releases.extend(data)
           self.progress.emit(
             page,
-            (self.max_pages) if self.max_pages > 0 else final_size,
+            (self.maxPages) if self.maxPages > 0 else final_size,
             releases,
           )
 
@@ -490,8 +490,8 @@ def run(config: Config):
       widget.setModeKnownEnd()
 
       item.setSizeHint(widget.sizeHint())
-      self.version_list.addItem(item)
-      self.version_list.setItemWidget(item, widget)
+      self.versionList.addItem(item)
+      self.versionList.setItemWidget(item, widget)
 
       item.setData(
         Qt.ItemDataRole.UserRole,
@@ -507,7 +507,7 @@ def run(config: Config):
       local_data = {}
       global_data = {}
 
-      for key, widget in self.widgets_to_save.items():
+      for key, widget in self.widgetsToSave.items():
         if isinstance(widget, QLineEdit):
           value = widget.text()
         elif isinstance(widget, QCheckBox):
@@ -517,13 +517,13 @@ def run(config: Config):
         else:
           continue
 
-        if key in self.local_keys:
+        if key in self.localKeys:
           local_data[key] = value
         else:
           global_data[key] = value
 
       try:
-        with open(self.local_settings_file, "w", encoding="utf-8") as f:
+        with open(self.LOCAL_SETTINGS_FILE, "w", encoding="utf-8") as f:
           json.dump(local_data, f, indent=2)
         with open(self.GLOBAL_SETTINGS_FILE, "w", encoding="utf-8") as f:
           json.dump(global_data, f, indent=2)
@@ -535,8 +535,8 @@ def run(config: Config):
       global_data = {}
 
       try:
-        if os.path.exists(self.local_settings_file):
-          with open(self.local_settings_file, "r", encoding="utf-8") as f:
+        if os.path.exists(self.LOCAL_SETTINGS_FILE):
+          with open(self.LOCAL_SETTINGS_FILE, "r", encoding="utf-8") as f:
             local_data = json.load(f)
         if os.path.exists(self.GLOBAL_SETTINGS_FILE):
           with open(self.GLOBAL_SETTINGS_FILE, "r", encoding="utf-8") as f:
@@ -547,7 +547,7 @@ def run(config: Config):
       combined = {**global_data, **local_data}
 
       for key, value in combined.items():
-        widget = self.widgets_to_save.get(key)
+        widget = self.widgetsToSave.get(key)
         if widget:
           if isinstance(widget, QLineEdit):
             widget.setText(str(value))
@@ -609,12 +609,12 @@ def run(config: Config):
         dest_dir = os.path.join(VERSIONS_DIR, tag)
         out_file = os.path.join(dest_dir, asset["name"])
 
-        widget = self.active_item_refs[data["version"]]
+        widget = self.activeItemRefs[data["version"]]
         assert isinstance(widget, VersionItemWidget)
         widget.label.setText(f"Waiting: {tag}")
         widget.setModeUnknownEnd()
 
-        self.download_queue.append(
+        self.downloadQueue.append(
           (
             item.data(Qt.ItemDataRole.UserRole)["version"],
             asset["browser_download_url"],
@@ -626,11 +626,11 @@ def run(config: Config):
 
     def processDownloadQueue(self):
       assert isinstance(self.settings.maxConcurrentDls, int)
-      while self.download_queue and (
-        len(self.active_downloads) < self.settings.maxConcurrentDls
+      while self.downloadQueue and (
+        len(self.activeDownloads) < self.settings.maxConcurrentDls
         or self.settings.maxConcurrentDls == 0
       ):
-        next_dl = self.download_queue.pop(0)
+        next_dl = self.downloadQueue.pop(0)
         self.startActualDownload(*next_dl)
       # print(self.downloadingVersions)
       self.updateVersionList()
@@ -641,11 +641,11 @@ def run(config: Config):
 
       dl_thread = AssetDownloadThread(url, out_file)
 
-      self.active_downloads[tag] = dl_thread
+      self.activeDownloads[tag] = dl_thread
 
       def onFinished(path):
         self.processDownloadQueue()
-        current_widget = self.active_item_refs.get(tag)
+        current_widget = self.activeItemRefs.get(tag)
         assert isinstance(current_widget, VersionItemWidget)
         current_widget.label.setText(f"Extracting {tag}...")
         current_widget.setModeUnknownEnd()
@@ -673,11 +673,11 @@ def run(config: Config):
 
         if extracted:
           print(f"Finished processing {tag}")
-          self.active_downloads.pop(tag, None)
+          self.activeDownloads.pop(tag, None)
           assert isinstance(current_widget, VersionItemWidget)
           self.processDownloadQueue()
         else:
-          self.active_downloads.pop(tag, None)
+          self.activeDownloads.pop(tag, None)
 
       dl_thread.progress.connect(bind(self.handleDownloadProgress, tag))
       dl_thread.finished.connect(onFinished)
@@ -688,17 +688,17 @@ def run(config: Config):
       dl_thread.start()
 
     def handleDownloadProgress(self, version_tag, percentage):
-      widget = self.active_item_refs.get(version_tag)
+      widget = self.activeItemRefs.get(version_tag)
       assert isinstance(widget, VersionItemWidget)
       widget.setProgress(percentage)
       widget.label.setText(f"Downloading {version_tag}... ({percentage}%)")
 
     def updateVersionList(self):
-      if not self.version_list:
+      if not self.versionList:
         return
       f.write(
         os.path.join(GAME_ID, "launcherData/cache/releases.json"),
-        json.dumps(self.found_releases),
+        json.dumps(self.foundReleases),
       )
       all_items_data = []
       local_versions = set()
@@ -715,7 +715,7 @@ def run(config: Config):
               }
             )
             local_versions.add(dirname)
-      for rel in self.found_releases:
+      for rel in self.foundReleases:
         version = rel.get("tag_name")
         if version and version not in local_versions:
           all_items_data.append(
@@ -728,24 +728,24 @@ def run(config: Config):
           )
 
       sorted_data = self.sortVersions(all_items_data)
-      self.version_list.setUpdatesEnabled(False)
-      self.version_list.blockSignals(True)
+      self.versionList.setUpdatesEnabled(False)
+      self.versionList.blockSignals(True)
       try:
-        self.active_item_refs.clear()
-        current_count = self.version_list.count()
+        self.activeItemRefs.clear()
+        current_count = self.versionList.count()
         target_count = len(sorted_data)
         if current_count < target_count:
           for _ in range(target_count - current_count):
             self.addVersionItem(version="loading", status=Statuses.online)
         elif current_count > target_count:
           for _ in range(current_count - target_count):
-            self.version_list.takeItem(self.version_list.count() - 1)
+            self.versionList.takeItem(self.versionList.count() - 1)
 
         for i, data in enumerate(sorted_data):
-          item = self.version_list.item(i)
+          item = self.versionList.item(i)
 
-          widget = self.version_list.itemWidget(item)
-          self.active_item_refs[data["version"]] = widget
+          widget = self.versionList.itemWidget(item)
+          self.activeItemRefs[data["version"]] = widget
           assert isinstance(widget, VersionItemWidget)
           if data["version"] in self.downloadingVersions:
             if not widget.noKnownEndPoint:
@@ -768,11 +768,11 @@ def run(config: Config):
           item.setData(Qt.ItemDataRole.UserRole, data)
       except Exception as e:
         print(f"Update Error: {e}")
-      self.version_list.blockSignals(False)
-      self.version_list.setUpdatesEnabled(True)
+      self.versionList.blockSignals(False)
+      self.versionList.setUpdatesEnabled(True)
 
     def loadLocalVersions(self):
-      self.version_list.clear()
+      self.versionList.clear()
 
       if not os.path.isdir(VERSIONS_DIR):
         return
@@ -820,8 +820,8 @@ def run(config: Config):
 
     def downloadAllVersions(self):
       online_count = 0
-      for i in range(self.version_list.count()):
-        item = self.version_list.item(i)
+      for i in range(self.versionList.count()):
+        item = self.versionList.item(i)
         data = item.data(Qt.ItemDataRole.UserRole)
         items = []
         if data and data.get("status") == Statuses.online:
@@ -840,21 +840,16 @@ def run(config: Config):
       super().__init__()
       self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
       self.settings = SettingsData()
-      self.active_item_refs = {}
-      self.active_downloads = {}
-      self.download_queue = []
+      self.activeItemRefs = {}
+      self.activeDownloads = {}
+      self.downloadQueue = []
       self.setWindowTitle(config.WINDOW_TITLE)
       self.setFixedSize(420, 600)
       self.setStyleSheet(f.read("./main.css"))
-      self.local_keys = ["extra_game_args"]
-      self.global_keys = [
-        "githubPat",
-        "checkForLauncherUpdatesWhenOpening",
-        "maxConcurrentDls",
-      ]
+      self.localKeys = ["extra_game_args"]
 
       self.GLOBAL_SETTINGS_FILE = "./launcherData/launcherSettings.json"
-      self.local_settings_file = os.path.join(
+      self.LOCAL_SETTINGS_FILE = os.path.join(
         GAME_ID, "launcherData/launcherSettings.json"
       )
       os.makedirs(os.path.join(GAME_ID, "launcherData/cache"), exist_ok=True)
@@ -863,47 +858,45 @@ def run(config: Config):
 
       main_layout = QVBoxLayout(self)
 
-      self.version_list = QListWidget()
+      self.versionList = QListWidget()
       self.loadLocalVersions()
 
-      main_layout.addWidget(self.version_list)
+      main_layout.addWidget(self.versionList)
       if OFFLINE:
         offline_label = QLabel("OFFLINE MODE")
         offline_label.setStyleSheet("color: orange; font-weight: bold;")
         main_layout.addWidget(offline_label)
 
-      self.version_list.itemDoubleClicked.connect(self.onVersionDoubleClicked)
+      self.versionList.itemDoubleClicked.connect(self.onVersionDoubleClicked)
 
-      main_layout.addWidget(self.version_list)
+      main_layout.addWidget(self.versionList)
 
-      self.widgets_to_save = {}
+      self.widgetsToSave = {}
 
-      self.main_progress_bar = VersionItemWidget("", MISSING_COLOR)
-      main_layout.addWidget(self.main_progress_bar)
+      self.mainProgressBar = VersionItemWidget("", MISSING_COLOR)
+      main_layout.addWidget(self.mainProgressBar)
 
       self.setupSettingsDialog()
       self.loadUserSettings()
 
-      self.btn_settings = QPushButton("Settings")
-      self.btn_settings.clicked.connect(self.openSettings)
-      main_layout.addWidget(self.btn_settings)
+      main_layout.addWidget(self.newButton("Settings", self.openSettings))
 
-      self.found_releases = json.loads(
+      self.foundReleases = json.loads(
         f.read(os.path.join(GAME_ID, "launcherData/cache/releases.json"), "[]")
       )
       self.updateVersionList()
       if not OFFLINE and self.settings.fetchOnLoad:
         self.startFetch(max_pages=self.settings.maxPagesOnLoad)
-        self.release_thread.error.connect(
+        self.releaseFetchingThread.error.connect(
           lambda e: print("Release fetch error:", e)
         )
-        self.release_thread.start()
-        self.main_progress_bar.show()
+        self.releaseFetchingThread.start()
+        self.mainProgressBar.show()
       else:
-        self.main_progress_bar.setProgress(101)
+        self.mainProgressBar.setProgress(101)
 
     def openSettings(self):
-      result = self.settings_dialog.exec()
+      result = self.settingsDialog.exec()
       if result == QDialog.DialogCode.Accepted:
         print("Saving settings...")
         self.saveUserSettings()
@@ -913,26 +906,26 @@ def run(config: Config):
 
     def startFetch(self, max_pages=1):
       """Standard fetch with a page limit."""
-      if hasattr(self, "release_thread") and self.release_thread.isRunning():
+      if hasattr(self, "release_thread") and self.releaseFetchingThread.isRunning():
         return
 
-      self.release_thread = ReleaseFetchThread(
+      self.releaseFetchingThread = ReleaseFetchThread(
         pat=self.settings.githubPat or None, max_pages=max_pages
       )
       if max_pages:
-        self.main_progress_bar.setModeKnownEnd()
-        self.main_progress_bar.setProgress((0 / max_pages) * 100)
+        self.mainProgressBar.setModeKnownEnd()
+        self.mainProgressBar.setProgress((0 / max_pages) * 100)
       else:
-        self.main_progress_bar.setModeUnknownEnd()
+        self.mainProgressBar.setModeUnknownEnd()
       if max_pages:
-        self.main_progress_bar.label.setText(
+        self.mainProgressBar.label.setText(
           f"Fetching {max_pages} page{'s' if max_pages==1 else ''}..."
         )
       else:
-        self.main_progress_bar.label.setText(f"Fetching page count...")
-      self.release_thread.progress.connect(self.onReleaseProgress)
-      self.release_thread.finished.connect(self.onReleaseFinished)
-      self.release_thread.start()
+        self.mainProgressBar.label.setText(f"Fetching page count...")
+      self.releaseFetchingThread.progress.connect(self.onReleaseProgress)
+      self.releaseFetchingThread.finished.connect(self.onReleaseFinished)
+      self.releaseFetchingThread.start()
 
     def mergeReleases(self, existing, new_data):
 
@@ -951,25 +944,25 @@ def run(config: Config):
       self.startFetch(max_pages=0)
 
     def onReleaseProgress(self, page, total, releases):
-      self.main_progress_bar.setModeKnownEnd()
-      self.main_progress_bar.setProgress((page / total) * 100)
-      self.found_releases = self.mergeReleases(self.found_releases, releases)
-      self.main_progress_bar.label.setText(
+      self.mainProgressBar.setModeKnownEnd()
+      self.mainProgressBar.setProgress((page / total) * 100)
+      self.foundReleases = self.mergeReleases(self.foundReleases, releases)
+      self.mainProgressBar.label.setText(
         f"Fetching {total} page(s)... {(page / total) * 100}% - {page} / {total}"
       )
       self.updateVersionList()
 
     def onReleaseFinished(self, releases):
-      self.main_progress_bar.label.setText("")
-      self.main_progress_bar.setProgress(101)
-      self.found_releases = self.mergeReleases(self.found_releases, releases)
+      self.mainProgressBar.label.setText("")
+      self.mainProgressBar.setProgress(101)
+      self.foundReleases = self.mergeReleases(self.foundReleases, releases)
       self.updateVersionList()
 
     def setupSettingsDialog(self):
-      self.settings_dialog = QDialog(self)
-      self.settings_dialog.setWindowTitle("Settings")
-      self.settings_dialog.setFixedWidth(420)
-      outer_layout = QVBoxLayout(self.settings_dialog)
+      self.settingsDialog = QDialog(self)
+      self.settingsDialog.setWindowTitle("Settings")
+      self.settingsDialog.setFixedWidth(420)
+      outer_layout = QVBoxLayout(self.settingsDialog)
 
       global_box = QGroupBox("Global Settings (All Games)")
       global_layout = QVBoxLayout()
@@ -984,7 +977,7 @@ def run(config: Config):
       global_layout.addWidget(
         self.newCheckbox(
           "check for launcher updates when opening",
-          True,
+          False,
           "checkForLauncherUpdatesWhenOpening",
         )
       )
@@ -996,7 +989,7 @@ def run(config: Config):
 
       global_layout.addLayout(
         self.newRow(
-          "Max pages to fetch on load:",
+          "Max pages to fetch:",
           self.newSpinBox(0, 100, 1, "maxPagesOnLoad"),
         )
       )
@@ -1048,19 +1041,19 @@ def run(config: Config):
         custom_widgets = config.addCustomNodes(self, local_layout)
         if custom_widgets:
           for key, widget in custom_widgets.items():
-            self.widgets_to_save[key] = widget
-            if key not in self.local_keys:
-              self.local_keys.append(key)
+            self.widgetsToSave[key] = widget
+            if key not in self.localKeys:
+              self.localKeys.append(key)
 
       local_box.setLayout(local_layout)
       outer_layout.addWidget(local_box)
 
       bottom_btn_layout = QHBoxLayout()
       cancel_btn = QPushButton("Cancel")
-      cancel_btn.clicked.connect(self.settings_dialog.reject)
+      cancel_btn.clicked.connect(self.settingsDialog.reject)
       done_btn = QPushButton("Done")
       done_btn.setDefault(True)
-      done_btn.clicked.connect(self.settings_dialog.accept)
+      done_btn.clicked.connect(self.settingsDialog.accept)
 
       bottom_btn_layout.addWidget(cancel_btn)
       bottom_btn_layout.addWidget(done_btn)
@@ -1076,7 +1069,7 @@ def run(config: Config):
 
       setattr(self.settings, saveId, default)
 
-      self.widgets_to_save[saveId] = node
+      self.widgetsToSave[saveId] = node
       return node
 
     def newButton(self, text, onclick):
@@ -1091,7 +1084,7 @@ def run(config: Config):
       row.addWidget(widget)
       row.addStretch()
       if saveId:
-        self.widgets_to_save[saveId] = widget
+        self.widgetsToSave[saveId] = widget
       return row
 
     def newCheckbox(self, text, default, saveId, tooltip="", onChange=None):
@@ -1105,7 +1098,7 @@ def run(config: Config):
       node.toggled.connect(lambda v: setattr(self.settings, saveId, v))
       setattr(self.settings, saveId, default)
 
-      self.widgets_to_save[saveId] = node
+      self.widgetsToSave[saveId] = node
       return node
 
     def newLineEdit(self, placeholder, saveId, password=False):
@@ -1117,7 +1110,7 @@ def run(config: Config):
       node.textChanged.connect(lambda v: setattr(self.settings, saveId, v))
       setattr(self.settings, saveId, "")
 
-      self.widgets_to_save[saveId] = node
+      self.widgetsToSave[saveId] = node
       return node
 
   app = QApplication(sys.argv)
