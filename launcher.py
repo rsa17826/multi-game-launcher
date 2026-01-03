@@ -37,6 +37,7 @@ def run(config: Config):
   import time
   import random
   import requests
+  import shlex
   from enum import Enum
   import json
   from PySide6.QtWidgets import (
@@ -570,7 +571,12 @@ def run(config: Config):
       if data["status"] == Statuses.local:
         path = data.get("path")
         if path:
-          config.gameLaunchRequested(path)
+          args = (
+            sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
+          )
+          config.gameLaunchRequested(
+            path, shlex.split(self.settings.extraGameArgs) + args
+          )
           f.write(
             os.path.join(GAME_ID, "launcherData/lastRanVersion.txt"),
             data.get("version"),
@@ -584,7 +590,7 @@ def run(config: Config):
 
     def startQueuedDownloadRequest(self, *versions):
       for data in versions:
-        tag = data['version']
+        tag = data["version"]
         if tag in self.downloadingVersions:
           return
 
@@ -904,9 +910,7 @@ def run(config: Config):
 
     def startFetch(self, max_pages=1):
       """Standard fetch with a page limit."""
-      if (
-        self.releaseFetchingThread.isRunning()
-      ):
+      if self.releaseFetchingThread.isRunning():
         return
 
       self.releaseFetchingThread = ReleaseFetchThread(
