@@ -33,6 +33,7 @@ class Statuses(Enum):
 
 
 def run(config: Config):
+  from itertools import islice
   import sys
   import time
   import random
@@ -575,7 +576,9 @@ def run(config: Config):
             sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
           )
           config.gameLaunchRequested(
-            path, shlex.split(self.settings.extraGameArgs) + args
+            path,
+            shlex.split(self.settings.extraGameArgs) + args,
+            self.settings,
           )
           f.write(
             os.path.join(GAME_ID, "launcherData/lastRanVersion.txt"),
@@ -600,7 +603,7 @@ def run(config: Config):
           (
             a
             for a in release.get("assets", [])
-            if a["name"] == config.getAssetName()
+            if a["name"] == config.getAssetName(self.settings)
           ),
           None,
         )
@@ -708,7 +711,9 @@ def run(config: Config):
       if os.path.isdir(VERSIONS_DIR):
         for dirname in os.listdir(VERSIONS_DIR):
           full_path = os.path.join(VERSIONS_DIR, dirname)
-          if os.path.isdir(full_path) and config.gameVersionExists(full_path):
+          if os.path.isdir(full_path) and config.gameVersionExists(
+            full_path, self.settings
+          ):
             all_items_data.append(
               {
                 "version": dirname,
@@ -786,7 +791,7 @@ def run(config: Config):
         if not os.path.isdir(full_path):
           continue
 
-        if not config.gameVersionExists(full_path):
+        if not config.gameVersionExists(full_path, self.settings):
           continue
 
         self.addVersionItem(
@@ -972,7 +977,7 @@ def run(config: Config):
       global_layout = QVBoxLayout()
 
       global_layout.addLayout(
-        self.newRow(
+        self.newLabel(
           "Max Concurrent Downloads:",
           self.newSpinBox(0, 10, 3, "maxConcurrentDls"),
         )
@@ -992,7 +997,7 @@ def run(config: Config):
       )
 
       global_layout.addLayout(
-        self.newRow(
+        self.newLabel(
           "Max Pages to Fetch:",
           self.newSpinBox(0, 100, 1, "maxPagesOnLoad"),
         )
@@ -1024,7 +1029,7 @@ def run(config: Config):
         )
       )
       global_layout.addLayout(
-        self.newRow(
+        self.newLabel(
           "GitHub PAT (Optional):",
           self.newLineEdit(
             "GitHub PAT (Optional)", "githubPat", password=True
@@ -1039,19 +1044,18 @@ def run(config: Config):
       local_layout = QVBoxLayout()
 
       local_layout.addLayout(
-        self.newRow(
+        self.newLabel(
           "Extra Game Args:",
           self.newLineEdit("Extra Game Args", "extraGameArgs"),
         )
       )
 
       if config.addCustomNodes:
-        custom_widgets = config.addCustomNodes(self, local_layout)
-        if custom_widgets:
-          for key, widget in custom_widgets.items():
-            self.widgetsToSave[key] = widget
-            if key not in self.localKeys:
-              self.localKeys.append(key)
+        lastWidgetCount = len(self.widgetsToSave)
+        config.addCustomNodes(self, local_layout)
+        for key in islice(self.widgetsToSave.keys(), lastWidgetCount, None):
+          if key not in self.localKeys:
+            self.localKeys.append(key)
 
       local_box.setLayout(local_layout)
       outer_layout.addWidget(local_box)
@@ -1085,7 +1089,7 @@ def run(config: Config):
       node.pressed.connect(onclick)
       return node
 
-    def newRow(self, label_text, widget, saveId=None):
+    def newLabel(self, label_text, widget, saveId=None):
       """Creates a horizontal row with a label and a widget."""
       row = QHBoxLayout()
       row.addWidget(QLabel(label_text))

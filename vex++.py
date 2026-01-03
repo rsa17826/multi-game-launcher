@@ -6,13 +6,15 @@ def getGameLogLocation():
   return ""
 
 
-def gameLaunchRequested(path, args):
+def gameLaunchRequested(path, args, settings) -> None:
   """called when the user tries to launch a version of the game
   this should open the game when called
   Args:
     path (str): the path to the game dir
     args (list[str]): the command-line arguments in list format
   """
+  if settings.loadSpecificMapOnStart:
+    args += ["--loadMap", settings.nameOfMapToLoad]
   exe = os.path.join(path, "vex.exe")
   if os.path.isfile(exe):
     subprocess.Popen([exe] + args, cwd=path)
@@ -21,7 +23,7 @@ def gameLaunchRequested(path, args):
     subprocess.Popen([exe] + shlex.split(args), cwd=path)
 
 
-def getAssetName():
+def getAssetName(settings) -> str:
   """file to download from gh releases eg windows.zip
   Returns:
     str
@@ -29,7 +31,7 @@ def getAssetName():
   return "windows.zip"
 
 
-def gameVersionExists(path):
+def gameVersionExists(path, settings) -> bool:
   """return true if the dir has a valid game version in it
   Args:
     path (str): path to dir to check
@@ -45,31 +47,27 @@ def gameVersionExists(path):
   )
 
 
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QVBoxLayout
 
 
-def addCustomNodes(_self, layout) -> dict[str, QWidget]:
+def addCustomNodes(_self, layout: QVBoxLayout) -> None:
   """
   Args:
     _self: The Launcher instance (to register widgets for saving)
     layout: The QVBoxLayout of the Local Settings section
   """
 
-  levelNameInput = _self.newLineEdit(
-    "Enter level name (e.g. Level_01)", "inputLevelName"
-  )
+  mapNameInput = _self.newLineEdit('Enter map name or "NEWEST"', "nameOfMapToLoad")
   layout.addWidget(
     _self.newCheckbox(
-      "Load Specific Level on Start",
+      "Load Specific Map on Start",
       False,
-      "loadCustomLevel",
-      onChange=levelNameInput.setEnabled,
+      "loadSpecificMapOnStart",
+      onChange=mapNameInput.setEnabled,
     )
   )
-  levelNameInput.setEnabled(_self.settings.loadCustomLevel)
-  layout.addWidget(levelNameInput)
-
-  return {}
+  mapNameInput.setEnabled(_self.settings.loadSpecificMapOnStart)
+  layout.addWidget(mapNameInput)
 
 
 import launcher
