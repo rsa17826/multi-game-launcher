@@ -31,7 +31,6 @@ from PySide6.QtGui import (
   QLinearGradient,
   QColor,
 )
-from PySide6.QtCore import QUrl
 from PySide6.QtCore import QTimer
 import os
 import zipfile
