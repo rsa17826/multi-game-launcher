@@ -1,3 +1,7 @@
+# @regex settings \(launcher\.SettingsData\): _description_
+# @replace settings (launcher.SettingsData): The current settings object containing user-defined flags
+# @endregex
+
 import launcher
 import os
 import subprocess, shlex
@@ -30,8 +34,11 @@ def gameLaunchRequested(path, args, settings: launcher.SettingsData) -> None:
 
 
 def getAssetName(settings: launcher.SettingsData) -> str:
-  """
-  Identifies which file to download from the GitHub Release assets.
+  """Identifies which file to download from the GitHub Release assets.
+  Args:
+    settings (launcher.SettingsData): The current settings object containing user-defined flags
+  Returns:
+    str: the name of the asset to download from gh
   """
   return "windows.zip"
 
@@ -40,6 +47,13 @@ def gameVersionExists(path, settings: launcher.SettingsData) -> bool:
   """
   Validation check to see if a folder contains a valid installation.
   Used by the launcher to decide if a version is 'Local' (Run) or 'Online' (Download).
+
+  Args:
+    path (str): path to check
+    settings (launcher.SettingsData): The current settings object containing user-defined flags
+
+  Returns:
+    bool: return true if the path has a game in it
   """
 
   def isfile(p):
