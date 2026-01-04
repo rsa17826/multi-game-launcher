@@ -8,3 +8,4 @@ gameData
 __pycache__
 vex++.py
 -
+*.egg-info
