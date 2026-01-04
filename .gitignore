@@ -9,3 +9,4 @@ __pycache__
 vex++.py
 -
 *.egg-info
+build

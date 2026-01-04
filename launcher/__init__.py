@@ -972,7 +972,7 @@ class Launcher(QWidget):
       LAUNCHER_START_PATH, "launcherData/launcherSettings.json"
     )
     self.LOCAL_SETTINGS_FILE = os.path.join(
-      LAUNCHER_START_PATH,
+      LAUNCHER_START_PATH if self.settings.centralGameDataLocations else "",
       self.GAME_ID,
       "launcherData/launcherSettings.json",
     )
