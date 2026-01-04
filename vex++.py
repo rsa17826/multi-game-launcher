@@ -14,7 +14,7 @@ class supportedOs(Enum):
   linux = 1
 
 
-def getGameLogLocation():
+def getGameLogLocation(selectedOs: supportedOs):
   return ""
 
 

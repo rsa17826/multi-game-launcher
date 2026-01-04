@@ -372,6 +372,7 @@ class SettingsData:
   def __getattr__(self, name) -> Any:
     return None
 
+
 def updateLauncher():
   import subprocess
   import os
@@ -405,9 +406,7 @@ def updateLauncher():
   try:
     print("Checking for updates...")
     # Run 'git pull' command to get the latest changes
-    subprocess.check_call(
-      ["git", "pull", "origin", "main"], cwd=local_dir
-    )
+    subprocess.check_call(["git", "pull", "origin", "main"], cwd=local_dir)
     print("Update successful!")
   except subprocess.CalledProcessError as e:
     print("Error during update:", e)
@@ -419,16 +418,13 @@ class Launcher(QWidget):
 
     if status == Statuses.local:
       color = LOCAL_COLOR
+      text = f"Run version {version}"
     elif status == Statuses.online:
       color = ONLINE_COLOR
+      text = f"Download version {version}"
     else:
       color = MISSING_COLOR
-
-    text = (
-      f"Run version {version}"
-      if status == Statuses.local
-      else f"Download version {version}"
-    )
+      text = "unknown"
 
     widget = VersionItemWidget(text, color)
     widget.setModeKnownEnd()
@@ -1064,37 +1060,43 @@ class Launcher(QWidget):
   def setupSettingsDialog(self):
     self.settingsDialog = QDialog(self)
     self.settingsDialog.setWindowTitle("Settings")
-    self.settingsDialog.setFixedWidth(420)
+    self.settingsDialog.setFixedWidth(600)
     outerLayout = QVBoxLayout(self.settingsDialog)
 
-    globalBox = QGroupBox("Global Settings (All Games)")
-    globalLayout = QVBoxLayout()
+    # region launcher
+    groupBox = QGroupBox("Launcher Settings")
+    groupLayout = QVBoxLayout()
 
-    globalLayout.addLayout(
-      self.newLabel(
-        "Max Concurrent Downloads:",
-        self.newSpinBox(0, 10, 3, "maxConcurrentDls"),
-      )
-    )
-
-    globalLayout.addWidget(
+    groupLayout.addWidget(
       self.newCheckbox(
         "Check for Launcher Updates when Opening",
         False,
         "checkForLauncherUpdatesWhenOpening",
       )
     )
-    globalLayout.addWidget(
+    groupLayout.addWidget(
       self.newButton(
-        "Update the Launcher Now",
+        "Update the Launcher Now (Must Have Git Installed)",
         updateLauncher,
       )
     )
-    globalLayout.addWidget(
+    groupBox.setLayout(groupLayout)
+    outerLayout.addWidget(groupBox)
+    # endregion
+    # region global
+    groupBox = QGroupBox("Global Settings (All Games)")
+    groupLayout = QVBoxLayout()
+
+    groupLayout.addWidget(
       self.newCheckbox("Fetch Releases on Launcher Start", True, "fetchOnLoad")
     )
-
-    globalLayout.addLayout(
+    groupLayout.addLayout(
+      self.newLabel(
+        "Max Concurrent Downloads:",
+        self.newSpinBox(0, 10, 3, "maxConcurrentDls"),
+      )
+    )
+    groupLayout.addLayout(
       self.newLabel(
         "Max Pages to Fetch:",
         self.newSpinBox(0, 100, 1, "maxPagesOnLoad"),
@@ -1110,55 +1112,58 @@ class Launcher(QWidget):
       )
     )
     fetchBtnRow.addWidget(self.newButton("Sync Full History", self.startFullFetch))
-    globalLayout.addLayout(fetchBtnRow)
-    globalLayout.addWidget(
+    groupLayout.addLayout(fetchBtnRow)
+    groupLayout.addWidget(
       self.newButton(
         "Download All Game Versions (May Hang for a Bit)",
         self.downloadAllVersions,
       )
     )
-    globalLayout.addWidget(
+    groupLayout.addWidget(
       self.newCheckbox(
         "Close Launcher on Game Start (May Cause some Games to Not Start)",
         False,
         "closeOnLaunch",
       )
     )
-    globalLayout.addLayout(
+    groupLayout.addLayout(
       self.newLabel(
         "GitHub PAT (Optional):",
         self.newLineEdit("GitHub PAT (Optional)", "githubPat", password=True),
+        False,
       )
     )
-    globalLayout.addLayout(
+    groupLayout.addLayout(
       self.newLabel(
         "Current Os:",
         self.newSelectBox(self.config.supportedOs, 0, "selectedOs"),
       )
     )
 
-    globalBox.setLayout(globalLayout)
-    outerLayout.addWidget(globalBox)
+    groupBox.setLayout(groupLayout)
+    outerLayout.addWidget(groupBox)
+    # endregion
+    # region local
+    groupBox = QGroupBox(f"Local Settings ({self.config.GH_REPO})")
+    groupLayout = QVBoxLayout()
 
-    localBox = QGroupBox(f"Local Settings ({self.config.GH_REPO})")
-    localLayout = QVBoxLayout()
-
-    localLayout.addLayout(
+    groupLayout.addLayout(
       self.newLabel(
         "Extra Game Args:",
         self.newLineEdit("Extra Game Args", "extraGameArgs"),
+        False,
       )
     )
 
     if self.config.addCustomNodes:
       lastWidgetCount = len(self.widgetsToSave)
-      self.config.addCustomNodes(self, localLayout)
+      self.config.addCustomNodes(self, groupLayout)
       for key in islice(self.widgetsToSave.keys(), lastWidgetCount, None):
         if key not in self.localKeys:
           self.localKeys.append(key)
 
-    localBox.setLayout(localLayout)
-    outerLayout.addWidget(localBox)
+    groupBox.setLayout(groupLayout)
+    outerLayout.addWidget(groupBox)
 
     bottom_btn_layout = QHBoxLayout()
     cancel_btn = QPushButton("Cancel")
@@ -1170,6 +1175,7 @@ class Launcher(QWidget):
     bottom_btn_layout.addWidget(cancel_btn)
     bottom_btn_layout.addWidget(done_btn)
     outerLayout.addLayout(bottom_btn_layout)
+    # endregion
 
   def newSpinBox(self, min_val, max_val, default, saveId, width=60):
     node = QSpinBox()
@@ -1189,14 +1195,13 @@ class Launcher(QWidget):
     node.pressed.connect(onclick)
     return node
 
-  def newLabel(self, label_text, widget, saveId=None):
+  def newLabel(self, label_text, widget, addStretch=True):
     """Creates a horizontal row with a label and a widget."""
     row = QHBoxLayout()
     row.addWidget(QLabel(label_text))
     row.addWidget(widget)
-    row.addStretch()
-    if saveId:
-      self.widgetsToSave[saveId] = widget
+    if addStretch:
+      row.addStretch()
     return row
 
   def newCheckbox(self, text, default, saveId, tooltip="", onChange=None):
@@ -1253,6 +1258,7 @@ class Launcher(QWidget):
 
     self.widgetsToSave[saveId] = node
     return node
+
 
 def run(config: Config):
   app = QApplication(sys.argv)
