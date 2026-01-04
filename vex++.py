@@ -4,7 +4,7 @@
 
 import launcher
 import os
-import subprocess, shlex
+import subprocess
 from PySide6.QtWidgets import QVBoxLayout
 from enum import Enum
 
@@ -14,7 +14,7 @@ class supportedOs(Enum):
   linux = 1
 
 
-def getGameLogLocation(selectedOs: supportedOs):
+def getGameLogLocation(selectedOs: supportedOs, gameId: str):
   return ""
 
 
@@ -58,9 +58,7 @@ def gameVersionExists(
       return isfile("vex.sh") and isfile("vex.pck")
 
 
-def addCustomNodes(
-  _self: launcher.Launcher, layout: QVBoxLayout
-) -> None:
+def addCustomNodes(_self: launcher.Launcher, layout: QVBoxLayout) -> None:
   mapNameInput = _self.newLineEdit('Enter map name or "NEWEST"', "nameOfMapToLoad")
 
   layout.addWidget(

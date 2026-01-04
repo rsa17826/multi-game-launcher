@@ -9,6 +9,8 @@ import requests
 import shlex
 from enum import Enum, EnumMeta
 import json
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import (
   QApplication,
   QWidget,
@@ -1154,7 +1156,26 @@ class Launcher(QWidget):
         False,
       )
     )
-
+    if self.config.getGameLogLocation(self.settings.selectedOs, self.GAME_ID):
+      groupLayout.addWidget(
+        self.newButton(
+          "Open Game Logs",
+          lambda: QDesktopServices.openUrl(
+            QUrl.fromLocalFile(
+              os.path.abspath(self.config.getGameLogLocation(self.settings.selectedOs, self.GAME_ID))
+            )
+          ),
+        )
+      )
+    if self.config.CAN_USE_CENTRAL_GAME_DATA_FOLDER:
+      groupLayout.addWidget(
+        self.newButton(
+          "Open Game Data Folder",
+          lambda: QDesktopServices.openUrl(
+            QUrl.fromLocalFile(os.path.abspath(os.path.join(self.GAME_ID, "gameData")))
+          ),
+        )
+      )
     if self.config.addCustomNodes:
       lastWidgetCount = len(self.widgetsToSave)
       self.config.addCustomNodes(self, groupLayout)
