@@ -396,6 +396,7 @@ def updateLauncher():
       subprocess.check_call(["git", "init"], cwd=path)
       # Add the remote repository URL
       subprocess.check_call(["git", "remote", "add", "origin", url], cwd=path)
+      subprocess.check_call(["git", "add", "."], cwd=path)
       print("Git repository initialized and remote set.")
     except subprocess.CalledProcessError as e:
       print("Error initializing repository:", e)
