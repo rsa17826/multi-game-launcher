@@ -1008,7 +1008,7 @@ class Launcher(QWidget):
 
   def startFetch(self, max_pages=1):
     """Standard fetch with a page limit."""
-    if self.releaseFetchingThread.isRunning():
+    if self.releaseFetchingThread and self.releaseFetchingThread.isRunning():
       return
 
     self.releaseFetchingThread = self.ReleaseFetchThread(
