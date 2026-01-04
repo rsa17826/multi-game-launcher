@@ -372,6 +372,46 @@ class SettingsData:
   def __getattr__(self, name) -> Any:
     return None
 
+def updateLauncher():
+  import subprocess
+  import os
+  import sys
+
+  # Set the repository URL and the local directory where the script is located
+  repo_url = "https://github.com/rsa17826/extendable-game-launcher.git"
+  local_dir = os.path.dirname(os.path.abspath(__file__))
+
+  # Check if the directory is a valid Git repository
+  def is_git_repo(path):
+    return os.path.isdir(os.path.join(path, ".git"))
+
+  # Initialize the Git repository if not already initialized
+  def init_git_repo(path, url):
+    try:
+      print(f"Initializing new Git repository in {path}...")
+      # Run git init to initialize the repo
+      subprocess.check_call(["git", "init"], cwd=path)
+      # Add the remote repository URL
+      subprocess.check_call(["git", "remote", "add", "origin", url], cwd=path)
+      print("Git repository initialized and remote set.")
+    except subprocess.CalledProcessError as e:
+      print("Error initializing repository:", e)
+      sys.exit(1)
+
+  if not is_git_repo(local_dir):
+    print("No .git directory found. Initializing repository...")
+    init_git_repo(local_dir, repo_url)
+
+  try:
+    print("Checking for updates...")
+    # Run 'git pull' command to get the latest changes
+    subprocess.check_call(
+      ["git", "pull", "origin", "main"], cwd=local_dir
+    )
+    print("Update successful!")
+  except subprocess.CalledProcessError as e:
+    print("Error during update:", e)
+
 
 class Launcher(QWidget):
   def addVersionItem(self, version: str, status: Statuses, path=None, release=None):
@@ -944,7 +984,10 @@ class Launcher(QWidget):
       f.read(os.path.join(self.GAME_ID, "launcherData/cache/releases.json"), "[]")
     )
     self.updateVersionList()
-    if not OFFLINE and self.settings.fetchOnLoad:
+    if not OFFLINE:
+      if self.settings.checkForLauncherUpdatesWhenOpening:
+        updateLauncher()
+    if OFFLINE and self.settings.fetchOnLoad:
       self.startFetch(max_pages=self.settings.maxPagesOnLoad)
       self.releaseFetchingThread.error.connect(
         lambda e: print("Release fetch error:", e)
@@ -1039,6 +1082,12 @@ class Launcher(QWidget):
         "Check for Launcher Updates when Opening",
         False,
         "checkForLauncherUpdatesWhenOpening",
+      )
+    )
+    globalLayout.addWidget(
+      self.newButton(
+        "Update the Launcher Now",
+        updateLauncher,
       )
     )
     globalLayout.addWidget(
@@ -1205,9 +1254,7 @@ class Launcher(QWidget):
     self.widgetsToSave[saveId] = node
     return node
 
-
 def run(config: Config):
-
   app = QApplication(sys.argv)
   window = Launcher(config)
   window.show()
