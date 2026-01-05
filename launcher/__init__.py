@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Dict, List, Any
 from functools import partial as bind
 from itertools import islice
 import sys
@@ -44,6 +44,8 @@ import math
 
 import hashlib
 
+selectorConfig = None
+
 LAUNCHER_START_PATH = os.path.abspath(os.path.dirname(__file__))
 
 OFFLINE = "offline" in sys.argv
@@ -59,6 +61,8 @@ UNKNOWN_TIME_LOADING_COLOR = (255, 108, 0)
 class Statuses(Enum):
   local = 0
   online = 1
+  gameSelector = 2
+  loadingInfo = 3
   # downloading = 2
   # waitingForDownload = 3
 
@@ -73,8 +77,8 @@ class Config:
   """github username eg rsa17826"""
   GH_REPO: str
   """github repo name eg vex-plus-plus"""
-  getGameLogLocation: Callable
-  gameLaunchRequested: Callable
+  getGameLogLocation: Callable = lambda *a: ""
+  gameLaunchRequested: Callable = lambda *a: None
   """
 Handles the execution of the game binary when the user double-clicks a version.
 
@@ -83,14 +87,14 @@ Args:
   args (list[str]): Base command-line arguments provided by the launcher.
   settings: The current settings object containing user-defined flags.
 """
-  getAssetName: Callable
+  getAssetName: Callable = lambda *a: ""
   """Identifies which file to download from the GitHub Release assets.
 Args:
   settings (launcher.SettingsData): The current settings object containing user-defined flags
 Returns:
   str: the name of the asset to download from gh
 """
-  gameVersionExists: Callable
+  gameVersionExists: Callable = lambda *a: False
   """
 Validation check to see if a folder contains a valid installation.
 Used by the launcher to decide if a version is 'Local' (Run) or 'Online' (Download).
@@ -102,7 +106,7 @@ Args:
 Returns:
   bool: return true if the path has a game in it
 """
-  addCustomNodes: Callable
+  addCustomNodes: Callable = lambda *a: None
   """
 Injects custom UI elements into the 'Local Settings' section of the Launcher.
 
@@ -115,6 +119,8 @@ Args:
   USE_HARD_LINKS: bool = False
   """if true will scan all new version downloads and check to see if any files are the same between different versions and replace the new files with hardlinks instead"""
   CAN_USE_CENTRAL_GAME_DATA_FOLDER: bool = False
+  """if true will make all game versions appear to be launched from a single dir else will just launch each one from a separate location"""
+  configs: Dict[Any, Any] | None = None
   """if true will make all game versions appear to be launched from a single dir else will just launch each one from a separate location"""
 
 
@@ -421,17 +427,7 @@ class Launcher(QWidget):
   def addVersionItem(self, version: str, status: Statuses, path=None, release=None):
     item = QListWidgetItem()
 
-    if status == Statuses.local:
-      color = LOCAL_COLOR
-      text = f"Run version {version}"
-    elif status == Statuses.online:
-      color = ONLINE_COLOR
-      text = f"Download version {version}"
-    else:
-      color = MISSING_COLOR
-      text = "unknown"
-
-    widget = VersionItemWidget(text, color)
+    widget = VersionItemWidget("", MISSING_COLOR)
     widget.setModeKnownEnd()
 
     item.setSizeHint(widget.sizeHint())
@@ -472,8 +468,9 @@ class Launcher(QWidget):
         global_data[key] = value
 
     try:
-      with open(self.LOCAL_SETTINGS_FILE, "w", encoding="utf-8") as f:
-        json.dump(local_data, f, indent=2)
+      if self.GAME_ID != "-":
+        with open(self.LOCAL_SETTINGS_FILE, "w", encoding="utf-8") as f:
+          json.dump(local_data, f, indent=2)
       with open(self.GLOBAL_SETTINGS_FILE, "w", encoding="utf-8") as f:
         json.dump(global_data, f, indent=2)
     except Exception as e:
@@ -484,7 +481,7 @@ class Launcher(QWidget):
     global_data = {}
 
     try:
-      if os.path.exists(self.LOCAL_SETTINGS_FILE):
+      if self.GAME_ID != "-" and os.path.exists(self.LOCAL_SETTINGS_FILE):
         with open(self.LOCAL_SETTINGS_FILE, "r", encoding="utf-8") as f:
           local_data = json.load(f)
       if os.path.exists(self.GLOBAL_SETTINGS_FILE):
@@ -586,35 +583,37 @@ class Launcher(QWidget):
     data = item.data(Qt.ItemDataRole.UserRole)
     if not data:
       return
-
-    if data["status"] == Statuses.local:
-      path = data.get("path")
-      if path:
-        args = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
-        self.config.gameLaunchRequested(
-          path,
-          shlex.split(self.settings.extraGameArgs) + args,
-          self.settings,
-          self.settings.selectedOs,
-        )
-        f.write(
-          os.path.join(
-            (
-              LAUNCHER_START_PATH
-              if self.settings.centralGameDataLocations
-              else ""
+    match data["status"]:
+      case Statuses.gameSelector:
+        run(data["release"]["config"])
+        self.close()
+        return
+      case Statuses.local:
+        path = data.get("path")
+        if path:
+          args = (
+            sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
+          )
+          self.config.gameLaunchRequested(
+            path,
+            shlex.split(self.settings.extraGameArgs) + args,
+            self.settings,
+            self.settings.selectedOs,
+          )
+          f.write(
+            os.path.join(
+              (LAUNCHER_START_PATH if True else ""),
+              self.GAME_ID,
+              "launcherData/lastRanVersion.txt",
             ),
-            self.GAME_ID,
-            "launcherData/lastRanVersion.txt",
-          ),
-          data.get("version"),
-        )
-        if self.settings.closeOnLaunch:
-          QApplication.quit()
-      return
+            data.get("version"),
+          )
+          if self.settings.closeOnLaunch:
+            QApplication.quit()
+        return
 
-    if data["status"] == Statuses.online:
-      self.startQueuedDownloadRequest(item.data(Qt.ItemDataRole.UserRole))
+      case Statuses.online:
+        self.startQueuedDownloadRequest(item.data(Qt.ItemDataRole.UserRole))
 
   def startQueuedDownloadRequest(self, *versions):
     for data in versions:
@@ -728,42 +727,59 @@ class Launcher(QWidget):
   def updateVersionList(self):
     if not self.versionList:
       return
-    f.write(
-      os.path.join(
-        LAUNCHER_START_PATH if self.settings.centralGameDataLocations else "",
-        self.GAME_ID,
-        "launcherData/cache/releases.json",
-      ),
-      json.dumps(self.foundReleases),
-    )
+    if self.GAME_ID != "_":
+      try:
+        f.write(
+          os.path.join(
+            (LAUNCHER_START_PATH if True else ""),
+            self.GAME_ID,
+            "launcherData/cache/releases.json",
+          ),
+          json.dumps(self.foundReleases),
+        )
+      except Exception as e:
+        print("failed to save cached data", e)
     all_items_data = []
     local_versions = set()
-    if os.path.isdir(self.VERSIONS_DIR):
-      for dirname in os.listdir(self.VERSIONS_DIR):
-        full_path = os.path.join(self.VERSIONS_DIR, dirname)
-        if os.path.isdir(full_path) and self.config.gameVersionExists(
-          full_path, self.settings, self.settings.selectedOs
-        ):
+    if self.config.configs:
+      for rel in self.foundReleases:
+        version = rel.get("tag_name")
+        if version and version not in local_versions:
           all_items_data.append(
             {
-              "version": dirname,
-              "status": Statuses.local,
-              "path": full_path,
-              "release": None,
+              "version": version,
+              "status": Statuses.gameSelector,
+              "path": None,
+              "release": rel,
             }
           )
-          local_versions.add(dirname)
-    for rel in self.foundReleases:
-      version = rel.get("tag_name")
-      if version and version not in local_versions:
-        all_items_data.append(
-          {
-            "version": version,
-            "status": Statuses.online,
-            "path": None,
-            "release": rel,
-          }
-        )
+    else:
+      if os.path.isdir(self.VERSIONS_DIR):
+        for dirname in os.listdir(self.VERSIONS_DIR):
+          full_path = os.path.join(self.VERSIONS_DIR, dirname)
+          if os.path.isdir(full_path) and self.config.gameVersionExists(
+            full_path, self.settings, self.settings.selectedOs
+          ):
+            all_items_data.append(
+              {
+                "version": dirname,
+                "status": Statuses.local,
+                "path": full_path,
+                "release": None,
+              }
+            )
+            local_versions.add(dirname)
+      for rel in self.foundReleases:
+        version = rel.get("tag_name")
+        if version and version not in local_versions:
+          all_items_data.append(
+            {
+              "version": version,
+              "status": Statuses.online,
+              "path": None,
+              "release": rel,
+            }
+          )
 
     sorted_data = self.sortVersions(all_items_data)
     self.versionList.setUpdatesEnabled(False)
@@ -774,7 +790,7 @@ class Launcher(QWidget):
       target_count = len(sorted_data)
       if current_count < target_count:
         for _ in range(target_count - current_count):
-          self.addVersionItem(version="loading", status=Statuses.online)
+          self.addVersionItem(version="loading", status=Statuses.loadingInfo)
       elif current_count > target_count:
         for _ in range(current_count - target_count):
           self.versionList.takeItem(self.versionList.count() - 1)
@@ -791,16 +807,20 @@ class Launcher(QWidget):
           widget.label.setText(f"Waiting To Download: {data['version']}")
         else:
           widget.setModeDisabled()
-          widget.label.setText(
-            f"Run version {data['version']}"
-            if data["status"] == Statuses.local
-            else f"Download version {data['version']}"
-          )
+          match data["status"]:
+            case Statuses.gameSelector:
+              widget.label.setText(f"Start {data['version']} Launcher")
+            case Statuses.local:
+              widget.label.setText(f"Run version {data['version']}")
+            case Statuses.online:
+              widget.label.setText(f"Download version {data['version']}")
         match data["status"]:
           case Statuses.local:
             new_color = LOCAL_COLOR
           case Statuses.online:
             new_color = ONLINE_COLOR
+          case Statuses.gameSelector:
+            new_color = LOCAL_COLOR
           case _:
             new_color = MISSING_COLOR
         widget.setLabelColor(new_color)
@@ -829,14 +849,18 @@ class Launcher(QWidget):
       self.addVersionItem(version=dirname, status=Statuses.local, path=full_path)
 
   def sortVersions(self, versions_data):
-
-    last_ran = f.read(
-      os.path.join(
-        LAUNCHER_START_PATH if self.settings.centralGameDataLocations else "",
-        self.GAME_ID,
-        "launcherData/lastRanVersion.txt",
-      )
-    ).strip()
+    last_ran = None
+    if self.GAME_ID != "-":
+      try:
+        last_ran = f.read(
+          os.path.join(
+            LAUNCHER_START_PATH if True else "",
+            self.GAME_ID,
+            "launcherData/lastRanVersion.txt",
+          )
+        ).strip()
+      except Exception as e:
+        print("failed reading lastRanVersion", e)
 
     def getSortKey(item):
       version = item["version"]
@@ -941,6 +965,13 @@ class Launcher(QWidget):
       except Exception as e:
         self.error.emit(str(e))
 
+  def goBackToSelector(self):
+    if selectorConfig:
+      # Re-run using the saved selector configuration
+      run(selectorConfig)
+      # Close the current game-specific launcher
+      self.close()
+
   def __init__(self, config: Config):
     super().__init__()
     self.releaseFetchingThread: Any = None
@@ -962,46 +993,25 @@ class Launcher(QWidget):
       ),
     ).strip()
     self.VERSIONS_DIR = os.path.join(
-      LAUNCHER_START_PATH if self.settings.centralGameDataLocations else "",
+      LAUNCHER_START_PATH if True else "",
       self.GAME_ID,
       "versions",
     )
-    self.API_URL = f"https://api.github.com/repos/{self.config.GH_USERNAME}/{self.config.GH_REPO}/releases"
-    os.makedirs(os.path.join(LAUNCHER_START_PATH, "launcherData"), exist_ok=True)
     self.GLOBAL_SETTINGS_FILE = os.path.join(
       LAUNCHER_START_PATH, "launcherData/launcherSettings.json"
     )
     self.LOCAL_SETTINGS_FILE = os.path.join(
-      LAUNCHER_START_PATH if self.settings.centralGameDataLocations else "",
+      LAUNCHER_START_PATH if True else "",
       self.GAME_ID,
       "launcherData/launcherSettings.json",
     )
-    os.makedirs(
-      os.path.join(
-        LAUNCHER_START_PATH if self.settings.centralGameDataLocations else "",
-        self.GAME_ID,
-        "launcherData/cache",
-      ),
-      exist_ok=True,
-    )
-    if config.CAN_USE_CENTRAL_GAME_DATA_FOLDER:
-      os.makedirs(
-        os.path.join(
-          (
-            LAUNCHER_START_PATH
-            if self.settings.centralGameDataLocations
-            else ""
-          ),
-          self.GAME_ID,
-          "gameData",
-        ),
-        exist_ok=True,
-      )
 
     main_layout = QVBoxLayout(self)
-
+    if selectorConfig and selectorConfig != self.config:
+      back_btn = self.newButton("<- Back to Selector", self.goBackToSelector)
+      # Style it differently if you want (optional)
+      main_layout.addWidget(back_btn)
     self.versionList = QListWidget()
-    self.loadLocalVersions()
 
     main_layout.addWidget(self.versionList)
     if OFFLINE:
@@ -1020,17 +1030,44 @@ class Launcher(QWidget):
 
     self.setupSettingsDialog()
     self.loadUserSettings()
+    self.loadLocalVersions()
 
     main_layout.addWidget(self.newButton("Settings", self.openSettings))
+
+    if self.config.configs is not None:
+      self.VERSIONS_DIR = "///"
+      self.foundReleases = list(
+        map(
+          lambda x: {"tag_name": x, "config": config.configs[x]}, config.configs  # type: ignore
+        )
+      )
+      self.updateVersionList()
+      self.mainProgressBar.setModeDisabled()
+      return
+    self.API_URL = f"https://api.github.com/repos/{self.config.GH_USERNAME}/{self.config.GH_REPO}/releases"
+    os.makedirs(os.path.join(LAUNCHER_START_PATH, "launcherData"), exist_ok=True)
+    os.makedirs(
+      os.path.join(
+        LAUNCHER_START_PATH if True else "",
+        self.GAME_ID,
+        "launcherData/cache",
+      ),
+      exist_ok=True,
+    )
+    if config.CAN_USE_CENTRAL_GAME_DATA_FOLDER:
+      os.makedirs(
+        os.path.join(
+          (LAUNCHER_START_PATH if True else ""),
+          self.GAME_ID,
+          "gameData",
+        ),
+        exist_ok=True,
+      )
 
     self.foundReleases = json.loads(
       f.read(
         os.path.join(
-          (
-            LAUNCHER_START_PATH
-            if self.settings.centralGameDataLocations
-            else ""
-          ),
+          (LAUNCHER_START_PATH if True else ""),
           self.GAME_ID,
           "launcherData/cache/releases.json",
         ),
@@ -1049,7 +1086,7 @@ class Launcher(QWidget):
       self.releaseFetchingThread.start()
       self.mainProgressBar.show()
     else:
-      self.mainProgressBar.setProgress(101)
+      self.mainProgressBar.setModeDisabled()
 
   def openSettings(self):
     result = self.settingsDialog.exec()
@@ -1341,13 +1378,82 @@ class Launcher(QWidget):
     return node
 
 
-def run(config: Config):
-  app = QApplication(sys.argv)
-  window = Launcher(config)
-  window.show()
+# Add this global variable at the top level of the file to keep the window alive
+_current_window = None
 
-  sys.exit(app.exec())
+
+def run(config: Config):
+  global _current_window
+
+  # Get the existing app instance or create a new one if it doesn't exist
+  app = QApplication.instance()
+  is_new_app = False
+
+  if app is None:
+    app = QApplication(sys.argv)
+    is_new_app = True
+
+  # Create the launcher window
+  # We store it in a global variable so it isn't garbage collected
+  _current_window = Launcher(config)
+  _current_window.show()
+
+  # Only call exec() if we created the QApplication here
+  if is_new_app:
+    sys.exit(app.exec())
+
+
+modules = {}
+
+import inspect
+
+
+def loadConfig(config: Config):
+  # 1. Get the actual main module (the one running the loop)
+  main_app = sys.modules["__main__"]
+
+  # 2. Check if the main app has the 'modules' list (meaning we are in the Selector)
+  if hasattr(main_app, "modules") and isinstance(main_app.modules, dict):
+    # We are inside the selector loop!
+
+    # Use 'inspect' to automatically find the name of the file calling this function
+    caller_frame = inspect.stack()[1]
+    caller_filename = caller_frame.filename
+    module_name = Path(caller_filename).stem
+
+    # Register the config into the MAIN list
+    main_app.modules[module_name] = config
+  else:
+    # We are NOT in the selector (User ran "python mygame.py" directly)
+    run(config)
 
 
 if __name__ == "__main__":
-  import example
+  import importlib
+
+  sys.path.append(os.path.abspath("."))
+  print("Current Working Directory:", os.getcwd())
+
+  apiUrls = []
+  for filename in os.listdir():
+    if filename.endswith(".py") and filename != "__init__.py":
+      module_name = filename[:-3]
+      module = importlib.import_module(module_name)
+
+  class supportedOs(Enum):
+    windows = 0
+    linux = 1
+
+  selectorConfig = Config(
+    WINDOW_TITLE="launcher selector",
+    CAN_USE_CENTRAL_GAME_DATA_FOLDER=False,
+    GH_USERNAME="",
+    GH_REPO="",
+    supportedOs=supportedOs,
+    configs=modules,
+  )
+  run(selectorConfig)
+# LAUNCHER_START_PATH
+#             if True
+#             else ""
+# self.settings.centralGameDataLocations
