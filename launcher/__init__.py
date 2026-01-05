@@ -391,7 +391,7 @@ def updateLauncher():
 
   # Set the repository URL and the local directory where the script is located
   repo_url = "https://github.com/rsa17826/extendable-game-launcher.git"
-  local_dir = os.path.dirname(os.path.abspath(__file__))
+  local_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 
   # Check if the directory is a valid Git repository
   def is_git_repo(path):
