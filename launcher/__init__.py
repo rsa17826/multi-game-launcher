@@ -1,3 +1,4 @@
+import inspect
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Any
 from functools import partial as bind
@@ -1378,34 +1379,36 @@ class Launcher(QWidget):
     return node
 
 
-# Add this global variable at the top level of the file to keep the window alive
 _current_window = None
 
 
 def run(config: Config):
   global _current_window
 
-  # Get the existing app instance or create a new one if it doesn't exist
-  app = QApplication.instance()
   is_new_app = False
-
-  if app is None:
+  app = QApplication.instance()
+  if not app:
     app = QApplication(sys.argv)
     is_new_app = True
 
-  # Create the launcher window
-  # We store it in a global variable so it isn't garbage collected
+  # Save the old geometry if a window is currently open
+  _last_geometry = None
+  if _current_window is not None:
+    _last_geometry = _current_window.saveGeometry()
+
   _current_window = Launcher(config)
+
+  # Apply the saved geometry before showing the window
+  if _last_geometry is not None:
+    _current_window.restoreGeometry(_last_geometry)
+
   _current_window.show()
 
-  # Only call exec() if we created the QApplication here
-  if is_new_app:
+  if is_new_app:  # Only exec if loop isn't running
     sys.exit(app.exec())
 
 
 modules = {}
-
-import inspect
 
 
 def loadConfig(config: Config):

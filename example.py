@@ -2,7 +2,7 @@
 # @replace settings (launcher.SettingsData): The current settings object containing user-defined flags
 # @endregex
 
-import __init__ as launcher
+import launcher as launcher
 from PySide6.QtWidgets import QVBoxLayout
 from enum import Enum
 
@@ -44,7 +44,7 @@ def addCustomNodes(_self: launcher.Launcher, layout: QVBoxLayout) -> None:
   )
 
 
-launcher.run(
+launcher.loadConfig(
   launcher.Config(
     WINDOW_TITLE="Example File",
     CAN_USE_CENTRAL_GAME_DATA_FOLDER=False,
