@@ -90,6 +90,10 @@ class Config:
   """github username eg rsa17826"""
   GH_REPO: str
   """github repo name eg vex-plus-plus"""
+  LAUNCHER_GH_USERNAME: str = ""
+  """github username for launcher updates - only set if launcher updates should use a separate repo"""
+  LAUNCHER_GH_REPO: str = ""
+  """github repo name for launcher updates - only set if launcher updates should use a separate repo"""
   LAUNCHER_ASSET_NAME: str = ""
   """Identifies which file to download from the GitHub Release assets for updating the launcher"""
   addContextMenuOptions: Callable = lambda *a: None
@@ -926,7 +930,7 @@ class Launcher(QWidget):
     onlineCount = 0
     for i in range(self.versionList.count()):
       item = self.versionList.item(i)
-      data :ItemListData= item.data(Qt.ItemDataRole.UserRole)
+      data: ItemListData = item.data(Qt.ItemDataRole.UserRole)
       items = []
       if data and data.status == Statuses.online:
         version = data.version
@@ -1144,22 +1148,150 @@ class Launcher(QWidget):
     data: ItemListData = item.data(Qt.ItemDataRole.UserRole)
     menu = QMenu(self)
 
+    def updateSubLauncher(launcherSettings: Config):
+      # self.startFetch(1, True)
+      releaseFetchingThread = self.ReleaseFetchThread(
+        f"https://api.github.com/repos/{launcherSettings.LAUNCHER_GH_USERNAME or launcherSettings.GH_USERNAME}/{launcherSettings.LAUNCHER_GH_REPO or launcherSettings.GH_REPO}/releases",
+        pat=self.settings.githubPat or None,
+        max_pages=1,
+      )
+      # self.mainProgressBar.setModeUnknownEnd()
+
+      self.config.getAssetName = lambda *a: launcherSettings.LAUNCHER_ASSET_NAME
+
+      def a(releases):
+        # self.mainProgressBar.setModeDisabled()
+        data.release = releases[0]
+        tag = data.version
+        if tag in self.downloadingVersions:
+          return
+
+        self.downloadingVersions.append(tag)
+        release = data.release
+        assert release is not None
+        asset = next(
+          (
+            a
+            for a in release.get("assets", [])
+            if a["name"]
+            == launcherSettings.getAssetName(
+              self.settings, self.settings.selectedOs
+            )
+          ),
+          None,
+        )
+
+        if not asset:
+          print(f"Asset Not Found for {tag}")
+          self.downloadingVersions.remove(tag)
+          return
+
+        dest_dir = os.path.join(
+          os.path.abspath(os.path.join(LAUNCHER_START_PATH, "-")), tag
+        )
+        out_file = os.path.join(dest_dir, asset["name"])
+
+        widget = self.activeItemRefs[data.version]
+        assert isinstance(widget, VersionItemWidget)
+        widget.setModeUnknownEnd()
+        print(asset["browser_download_url"], tag)
+        os.makedirs(dest_dir, exist_ok=True)
+
+        dl_thread = AssetDownloadThread(asset["browser_download_url"], out_file)
+
+        self.activeDownloads[tag] = dl_thread
+
+        def onFinished(path):
+          current_widget = self.activeItemRefs.get(tag)
+          assert isinstance(current_widget, VersionItemWidget)
+          current_widget.label.setText(f"Extracting {tag}...")
+          current_widget.setModeUnknownEnd()
+
+          extracted = False
+          try:
+            if path.endswith(".zip"):
+              with zipfile.ZipFile(path, "r") as zip_ref:
+                zip_ref.extractall(dest_dir)
+              os.remove(path)
+              extracted = True
+            elif path.endswith(".7z"):
+              with py7zr.SevenZipFile(path, mode="r") as archive:
+                archive.extractall(path=dest_dir)
+              os.remove(path)
+              extracted = True
+
+            if extracted and self.config.USE_HARD_LINKS:
+              self.deduplicateWithHardlinks(dest_dir)
+          except Exception as e:
+            print(f"Extraction Error For {tag}: {e}")
+
+          if tag in self.downloadingVersions:
+            self.downloadingVersions.remove(tag)
+
+          if extracted:
+            print(f"Finished Processing {tag}")
+            self.activeDownloads.pop(tag, None)
+            assert isinstance(current_widget, VersionItemWidget)
+          else:
+            self.activeDownloads.pop(tag, None)
+          for root, dirs, files in os.walk(dest_dir):
+            if data.version + ".py" in files:
+              assert data.path is not None
+              os.remove(data.path)
+              shutil.move(
+                os.path.join(root, data.version + ".py"), data.path
+              )
+              shutil.rmtree(dest_dir)
+              self.updateVersionList()
+              return
+          self.updateVersionList()
+          current_widget = self.activeItemRefs.get(tag)
+          assert isinstance(current_widget, VersionItemWidget)
+          current_widget.label.setText(f"Failed to Update {data.version}")
+          current_widget.setLabelColor(Qt.GlobalColor.red)
+          shutil.rmtree(dest_dir)
+
+        dl_thread.progress.connect(bind(self.handleDownloadProgress, tag))
+        dl_thread.finished.connect(onFinished)
+        dl_thread.error.connect(lambda e: print(f"DL Error {tag}: {e}"))
+        dl_thread.finished.connect(dl_thread.deleteLater)
+        dl_thread.start()
+
+      # store releaseFetchingThread for now to prevent crash
+      self.activeDownloads[data.version] = releaseFetchingThread
+      releaseFetchingThread.finished.connect(a)
+      releaseFetchingThread.finished.connect(releaseFetchingThread.deleteLater)
+      releaseFetchingThread.start()
+
     def newAction(text: str, onclick: Callable):
       run_action = menu.addAction(text)
       run_action.triggered.connect(onclick)
 
-    if data.path:
-      newAction("Open Folder", lambda: self.openFile(data.path))
-    if data.release:
-      newAction(
-        f"{"Red" if data.status==Statuses.local else "D"}ownload Version {data.version}",
-        lambda: self.startQueuedDownloadRequest(data),
-      )
+    print(data.status)
+    if data.status == Statuses.gameSelector:
+      if self.config.configs is not None:
+        print(self.config.configs[data.version].LAUNCHER_ASSET_NAME)
+        if self.config.configs[data.version].LAUNCHER_ASSET_NAME:
+          newAction(
+            f"Update {data.version} Launcher",
+            bind(updateSubLauncher, self.config.configs[data.version]),
+          )
+    else:
+      if data.path:
+        newAction("Open Folder", lambda: self.openFile(data.path))
+        newAction(
+          f"Delete Version {data.version}", lambda: self.openFile(data.path)
+        )
+      if data.release:
+        newAction(
+          f"{"Red" if data.status==Statuses.local else "D"}ownload Version {data.version}",
+          lambda: self.startQueuedDownloadRequest(data),
+        )
     menu.addSeparator()
     self.config.addContextMenuOptions(self, data, menu, newAction)
     menu.exec(self.versionList.mapToGlobal(pos))
 
-  def startFetch(self, max_pages=1):
+  def startFetch(self, max_pages=1, noDefaultConnections=False):
     """Standard fetch with a page limit."""
     if self.releaseFetchingThread and self.releaseFetchingThread.isRunning():
       return
@@ -1178,8 +1310,9 @@ class Launcher(QWidget):
       )
     else:
       self.mainProgressBar.label.setText(f"Fetching Page Count...")
-    self.releaseFetchingThread.progress.connect(self.onReleaseProgress)
-    self.releaseFetchingThread.finished.connect(self.onReleaseFinished)
+    if not noDefaultConnections:
+      self.releaseFetchingThread.progress.connect(self.onReleaseProgress)
+      self.releaseFetchingThread.finished.connect(self.onReleaseFinished)
     self.releaseFetchingThread.start()
 
   def mergeReleases(self, existing, new_data):
@@ -1209,7 +1342,7 @@ class Launcher(QWidget):
 
   def onReleaseFinished(self, releases):
     self.mainProgressBar.label.setText("")
-    self.mainProgressBar.setProgress(101)
+    self.mainProgressBar.setModeDisabled()
     self.foundReleases = self.mergeReleases(self.foundReleases, releases)
     self.updateVersionList()
 
