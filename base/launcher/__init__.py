@@ -1647,22 +1647,18 @@ class Launcher(QWidget):
       )
     )
     if self.config.CAN_USE_CENTRAL_GAME_DATA_FOLDER:
-      groupLayout.addLayout(
-        self.newLabel(
-          "Extra Game Args:",
-          self.newCheckbox(
-            "Use Central Game Data Folder", True, "useCentralGameDataFolder"
-          ),
-          False,
-        )
+      groupLayout.addWidget(
+        self.newCheckbox(
+          "Use Central Game Data Folder", True, "useCentralGameDataFolder"
+        ),
       )
     self.loadUserSettings()
-    if self.config.getGameLogLocation(self.settings.selectedOs, self.GAME_ID):
+    if self.config.getGameLogLocation(self.settings, self.settings.selectedOs, self.GAME_ID):
       groupLayout.addWidget(
         self.newButton(
           "Open Game Logs",
           lambda: self.openFile(
-            self.config.getGameLogLocation(
+            self.config.getGameLogLocation(self.settings,
               self.settings.selectedOs, self.GAME_ID
             )
           ),
