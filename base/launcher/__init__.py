@@ -612,7 +612,9 @@ def updateLauncher():
   try:
     print("Checking for updates...")
     subprocess.check_call(["git", "reset", "--hard", "origin/main"], cwd=local_dir)
-    subprocess.check_call(["git", "pull", "--force", "origin", "main"], cwd=local_dir)
+    subprocess.check_call(
+      ["git", "pull", "--force", "origin", "main"], cwd=local_dir
+    )
     print("Update successful!")
   except subprocess.CalledProcessError as e:
     print("Error during update:", e)
@@ -797,6 +799,7 @@ class Launcher(QWidget):
             shlex.split(self.settings.extraGameArgs) + args,
             self.settings,
             self.settings.selectedOs,
+            self.requestedGameDataLocation
           )
           f.write(
             os.path.join(
@@ -1286,13 +1289,15 @@ class Launcher(QWidget):
       ),
       exist_ok=True,
     )
+    self.requestedGameDataLocation = None
     if config.CAN_USE_CENTRAL_GAME_DATA_FOLDER:
+      self.requestedGameDataLocation = os.path.join(
+        (LAUNCHER_START_PATH if True else ""),
+        self.GAME_ID,
+        "gameData",
+      )
       os.makedirs(
-        os.path.join(
-          (LAUNCHER_START_PATH if True else ""),
-          self.GAME_ID,
-          "gameData",
-        ),
+        self.requestedGameDataLocation,
         exist_ok=True,
       )
 
@@ -1835,7 +1840,7 @@ def findAllLaunchables():
     if filename.endswith(".py") and filename != "__init__.py":
       module_name = filename[:-3]
       importlib.import_module(module_name)
-      if module_name==LAUNCHER_TO_LAUNCH:
+      if module_name == LAUNCHER_TO_LAUNCH:
         run(modules[module_name], module_name)
         return
 
