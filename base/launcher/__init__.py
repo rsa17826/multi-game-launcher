@@ -1,7 +1,7 @@
 import shutil
 import inspect
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Any
+from typing import Callable, Dict, List, Any, Tuple, Optional
 from functools import partial as bind
 from itertools import islice
 import sys
@@ -11,7 +11,7 @@ import requests
 import shlex
 from enum import Enum, EnumMeta
 import json
-from PySide6.QtGui import QDesktopServices, QPixmap
+from PySide6.QtGui import QDesktopServices, QPixmap, QIcon
 from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import (
   QApplication,
@@ -47,11 +47,110 @@ import math
 
 import hashlib
 
+
+@dataclass
+class ArgumentData:
+  key: str
+  afterCount: int
+  default: Optional[Any] = None
+
+  def __post_init__(self):
+    if self.afterCount == 0:
+      self.default = False
+    self.key = self.key.lstrip("-")
+
+
+def checkArgs(*argData: ArgumentData) -> list[Any]:
+  args: List[str] = sys.argv[1:]  # Ignore the script name, only check arguments
+  if "--" in args:
+    beforeDashArgs = args[: args.index("--")]
+  else:
+    beforeDashArgs = args
+  # print(beforeDashArgs, args)
+  # Initialize results with the default values from argData
+  results = [data.default for data in argData]
+  argData_dict = {
+    data.key: data for data in argData
+  }  # Map keys to their ArgumentData
+
+  i = 0
+  while i < len(beforeDashArgs):
+    key = beforeDashArgs[i].lstrip("-")
+
+    if key in argData_dict:
+      data = argData_dict[key]
+      afterCount = data.afterCount
+      idx = next((index for index, e in enumerate(argData) if e.key == key), None)
+      assert idx is not None
+
+      if afterCount == 0:
+        # If afterCount is 0, consume the key (do not use its value)
+        beforeDashArgs.pop(i)
+        results[idx] = True  # True for a valid flag
+
+      elif afterCount == 1:
+        # If afterCount is 1, consume the next argument as the value for the key
+        if i + 1 < len(beforeDashArgs):
+          value = beforeDashArgs[i + 1]
+          beforeDashArgs.pop(i)  # Remove the key
+          beforeDashArgs.pop(i)  # Remove the value
+          results[idx] = value  # Then the value
+        else:
+          # If no argument follows the key, use the default
+          beforeDashArgs.pop(i)  # Remove the key
+          print(
+            "err",
+            key,
+            "requires",
+            afterCount,
+            "args",
+            "but received",
+            len(beforeDashArgs),
+            "args",
+          )
+          results[idx] = data.default
+
+      elif afterCount > 1:
+        # If afterCount > 1, return the next `afterCount` arguments
+        if len(beforeDashArgs) >= i + 1 + afterCount:
+          values = beforeDashArgs[i + 1 : i + 1 + afterCount]
+          beforeDashArgs = (
+            beforeDashArgs[:i] + beforeDashArgs[i + 1 + afterCount :]
+          )
+          results[idx] = values
+        else:
+          print(
+            "err",
+            key,
+            "requires",
+            afterCount,
+            "args",
+            "but received",
+            len(beforeDashArgs),
+            "args",
+          )
+          beforeDashArgs = []
+
+    else:
+      # If the key is invalid, just skip it and move to the next argument
+      beforeDashArgs.pop(i)
+      continue  # Skip to the next argument
+
+    # Skip over the processed argument
+    continue
+
+  # print(results)
+  return results
+
+
 selectorConfig = None
 
 LAUNCHER_START_PATH = os.path.abspath(os.path.dirname(__file__))
-
-OFFLINE = "offline" in sys.argv
+# asdadsas
+OFFLINE, LAUNCHER_TO_LAUNCH = checkArgs(
+  ArgumentData(key="offline", afterCount=0),
+  ArgumentData(key="launcherName", afterCount=1),
+)
 
 LOCAL_COLOR = Qt.GlobalColor.green
 LOCAL_ONLY_COLOR = Qt.GlobalColor.yellow
@@ -485,7 +584,7 @@ def updateLauncher():
 
   # Set the repository URL and the local directory where the script is located
   repo_url = "https://github.com/rsa17826/extendable-game-launcher.git"
-  local_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+  local_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../..")
 
   # Check if the directory is a valid Git repository
   def is_git_repo(path):
@@ -499,7 +598,8 @@ def updateLauncher():
       subprocess.check_call(["git", "init"], cwd=path)
       # Add the remote repository URL
       subprocess.check_call(["git", "remote", "add", "origin", url], cwd=path)
-      subprocess.check_call(["git", "add", "."], cwd=path)
+      subprocess.check_call(["git", "add", "-A"], cwd=path)
+      subprocess.check_call(["git", "fetch", "origin"], cwd=local_dir)
       print("Git repository initialized and remote set.")
     except subprocess.CalledProcessError as e:
       print("Error initializing repository:", e)
@@ -511,8 +611,8 @@ def updateLauncher():
 
   try:
     print("Checking for updates...")
-    # Run 'git pull' command to get the latest changes
-    subprocess.check_call(["git", "pull", "origin", "main"], cwd=local_dir)
+    subprocess.check_call(["git", "reset", "--hard", "origin/main"], cwd=local_dir)
+    subprocess.check_call(["git", "pull", "--force", "origin", "main"], cwd=local_dir)
     print("Update successful!")
   except subprocess.CalledProcessError as e:
     print("Error during update:", e)
@@ -912,11 +1012,15 @@ class Launcher(QWidget):
           #   widget.setIcon(data.release["config"].getImage(data.version))
           # else:
           #   widget.setIcon(self.config.getImage(data.version))
+          imagePath = None
           if data.status == Statuses.gameSelector:
             assert data.release is not None
-            imagePath = checkImageExtension("images/" + data.version)
+            imagePath = "images/" + data.version + ".png"
+            print(imagePath)
+            # imagePath = checkImageExtension("images/" + data.version)
           else:
-            imagePath = checkImageExtension("images/" + self.gameName)
+            self.setWindowIcon(QIcon("images/" + self.gameName + ".png"))
+            # imagePath = checkImageExtension("images/" + self.gameName)
           widget.setIcon(imagePath)
         else:
           widget.setIcon(None)
@@ -1731,6 +1835,9 @@ def findAllLaunchables():
     if filename.endswith(".py") and filename != "__init__.py":
       module_name = filename[:-3]
       importlib.import_module(module_name)
+      if module_name==LAUNCHER_TO_LAUNCH:
+        run(modules[module_name], module_name)
+        return
 
   class supportedOs(Enum):
     windows = 0
