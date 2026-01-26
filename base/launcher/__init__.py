@@ -855,13 +855,6 @@ class Launcher(QWidget):
     if not usesCentralGameDataLocation:
       gdl = os.path.join(gdl, str(data.version))
     os.makedirs(gdl, exist_ok=True)
-    self.config.gameLaunchRequested(
-      data.path,
-      shlex.split(self.settings.extraGameArgs) + args,
-      self.settings,
-      self.settings.selectedOs,
-      gdl,
-    )
     f.write(
       os.path.join(
         (LAUNCHER_START_PATH if True else ""),
@@ -869,6 +862,13 @@ class Launcher(QWidget):
         "launcherData/lastRanVersion.txt",
       ),
       data.version,
+    )
+    self.config.gameLaunchRequested(
+      data.path,
+      shlex.split(self.settings.extraGameArgs) + args,
+      self.settings,
+      self.settings.selectedOs,
+      gdl,
     )
     if self.settings.closeOnLaunch:
       QApplication.quit()
