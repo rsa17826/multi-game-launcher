@@ -608,6 +608,7 @@ class SettingsData:
   """A container for dot-notation access to settings."""
 
   def __getattr__(self, name) -> Any:
+    print("WARNING: ", name, "was not set")
     return None
 
 
@@ -837,38 +838,40 @@ class Launcher(QWidget):
       case Statuses.local | Statuses.localOnly:
         path = data.path
         if path:
-          args = (
-            sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
-          )
-          usesCentralGameDataLocation = (
-            self.config.CAN_USE_CENTRAL_GAME_DATA_FOLDER
-            and self.settings.useCentralGameDataFolder
-          )
-          gdl = self.gameDataLocation
-          if not usesCentralGameDataLocation:
-            gdl = os.path.join(gdl, str(data.version))
-          os.makedirs(gdl, exist_ok=True)
-          self.config.gameLaunchRequested(
-            path,
-            shlex.split(self.settings.extraGameArgs) + args,
-            self.settings,
-            self.settings.selectedOs,
-            gdl,
-          )
-          f.write(
-            os.path.join(
-              (LAUNCHER_START_PATH if True else ""),
-              self.GAME_ID,
-              "launcherData/lastRanVersion.txt",
-            ),
-            data.version,
-          )
-          if self.settings.closeOnLaunch:
-            QApplication.quit()
+          self.startGameVersion(data)
         return
-
       case Statuses.online:
-        self.startQueuedDownloadRequest(item.data(Qt.ItemDataRole.UserRole))
+        self.startQueuedDownloadRequest(data)
+
+  def startGameVersion(self, data:ItemListData):
+    args: List[str] = (
+      sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
+    )
+    usesCentralGameDataLocation = (
+      self.config.CAN_USE_CENTRAL_GAME_DATA_FOLDER
+      and self.settings.useCentralGameDataFolder
+    )
+    gdl = self.gameDataLocation
+    if not usesCentralGameDataLocation:
+      gdl = os.path.join(gdl, str(data.version))
+    os.makedirs(gdl, exist_ok=True)
+    self.config.gameLaunchRequested(
+      data.path,
+      shlex.split(self.settings.extraGameArgs) + args,
+      self.settings,
+      self.settings.selectedOs,
+      gdl,
+    )
+    f.write(
+      os.path.join(
+        (LAUNCHER_START_PATH if True else ""),
+        self.GAME_ID,
+        "launcherData/lastRanVersion.txt",
+      ),
+      data.version,
+    )
+    if self.settings.closeOnLaunch:
+      QApplication.quit()
 
   def startQueuedDownloadRequest(self, *versions: ItemListData):
     for data in versions:
@@ -965,6 +968,9 @@ class Launcher(QWidget):
         self.processDownloadQueue()
       else:
         self.activeDownloads.pop(tag, None)
+      self.config.onGameVersionDownloadComplete(path, tag)
+      if VERSION and VERSION == tag:
+        self.startGameVersion(ItemListData(path=dest_dir, status=Statuses.local, version=tag, release={}))
 
     dl_thread.progress.connect(bind(self.handleDownloadProgress, tag))
     dl_thread.finished.connect(onFinished)
@@ -1397,6 +1403,18 @@ class Launcher(QWidget):
       self.mainProgressBar.show()
     else:
       self.mainProgressBar.setModeDisabled()
+    if self.gameName and VERSION:
+      for i in range(self.versionList.count()):
+        item = self.versionList.item(i)
+        data: ItemListData = item.data(Qt.ItemDataRole.UserRole)
+        if not data:
+          continue
+        if data.version == VERSION:
+          if data.status == Statuses.online:
+            if data.version not in self.downloadingVersions:
+              self.startQueuedDownloadRequest(data)
+          if data.status == Statuses.local or data.status == Statuses.localOnly:
+            self.startGameVersion(data)
 
   def openSettings(self):
     result = self.settingsDialog.exec()
@@ -1816,7 +1834,6 @@ class Launcher(QWidget):
           self.updateVersionList()
           if found["py"]:
             self.showRestartPrompt(f"{tag} updated successfully.")
-          self.config.onGameVersionDownloadComplete(data.path, tag)
 
       dl_thread.progress.connect(on_progress)
       dl_thread.finished.connect(on_finished)
