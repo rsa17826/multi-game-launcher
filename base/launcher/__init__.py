@@ -152,7 +152,7 @@ OFFLINE, LAUNCHER_TO_LAUNCH = checkArgs(
   ArgumentData(key="offline", afterCount=0),
   ArgumentData(key="launcherName", afterCount=1),
 )
-
+print(OFFLINE, LAUNCHER_TO_LAUNCH)
 LOCAL_COLOR = Qt.GlobalColor.green
 ERROR_COLOR = Qt.GlobalColor.darkRed
 LOCAL_ONLY_COLOR = Qt.GlobalColor.yellow
@@ -1543,12 +1543,13 @@ class Launcher(QWidget):
     # region local
     groupBox = QGroupBox(f"Local Settings ({self.config.GH_REPO})")
     groupLayout = QVBoxLayout()
-    groupLayout.addWidget(
-      self.newButton(
-        "Update " + self.GAME_ID + " Launcher",
-        bind(self.updateSubLauncher, widget=self.mainProgressBar),
+    if self.gameName:
+      groupLayout.addWidget(
+        self.newButton(
+          "Update " + self.gameName + " Launcher",
+          bind(self.updateSubLauncher, widget=self.mainProgressBar),
+        )
       )
-    )
     groupLayout.addLayout(
       self.newLabel(
         "Current Os:",
@@ -1614,105 +1615,6 @@ class Launcher(QWidget):
     outerLayout.addLayout(bottom_btn_layout)
     # endregion
 
-  # def updateSubLauncher(self):
-  #   """Triggered from the Settings menu to update the specific game launcher script."""
-  #   # 1. Identify where to get the update from
-  #   gh_user = self.config.LAUNCHER_GH_USERNAME or self.config.GH_USERNAME
-  #   gh_repo = self.config.LAUNCHER_GH_REPO or self.config.GH_REPO
-  #   asset_name = self.config.LAUNCHER_ASSET_NAME
-
-  #   if not asset_name:
-  #     print("No LAUNCHER_ASSET_NAME defined for this config.")
-  #     return
-
-  #   api_url = f"https://api.github.com/repos/{gh_user}/{gh_repo}/releases"
-
-  #   # 2. Fetch the latest release metadata
-  #   fetcher = self.ReleaseFetchThread(
-  #     api_url, pat=self.settings.githubPat or None, max_pages=1
-  #   )
-
-  #   def on_metadata_fetched(releases):
-  #     if not releases:
-  #       print("No releases found to update from.")
-  #       return
-
-  #     release = releases[0]
-  #     asset = next(
-  #       (a for a in release.get("assets", []) if a["name"] == asset_name), None
-  #     )
-
-  #     if not asset:
-  #       print(f"Could not find asset {asset_name} in the latest release.")
-  #       return
-
-  #     # 3. Setup download paths
-  #     temp_dir = os.path.join(LAUNCHER_START_PATH, "temp_update")
-  #     os.makedirs(temp_dir, exist_ok=True)
-  #     download_path = os.path.join(temp_dir, asset_name)
-
-  #     dl_thread = AssetDownloadThread(
-  #       asset["browser_download_url"], download_path
-  #     )
-
-  #     def on_download_finished(path):
-  #       try:
-  #         # 1. Extraction logic
-  #         if path.endswith(".zip"):
-  #           with zipfile.ZipFile(path, "r") as zip_ref:
-  #             zip_ref.extractall(temp_dir)
-  #         elif path.endswith(".7z"):
-  #           with py7zr.SevenZipFile(path, mode="r") as archive:
-  #             archive.extractall(path=temp_dir)
-
-  #         # 2. Locate and move the file
-  #         target_file = os.path.abspath(sys.modules[self.gameName].__file__)
-  #         found = False
-  #         for root, _, files in os.walk(temp_dir):
-  #           if f"{self.gameName}.py" in files:
-  #             new_file_source = os.path.join(root, f"{self.gameName}.py")
-  #             shutil.move(new_file_source, target_file)
-  #             found = True
-  #             break
-
-  #         if found:
-  #           # 3. Create the Restart Prompt
-  #           msg = QMessageBox(self)
-  #           msg.setWindowTitle("Update Complete")
-  #           msg.setText(f"Successfully updated {self.gameName}.")
-  #           msg.setInformativeText(
-  #             "Would you like to restart the launcher now to apply changes?"
-  #           )
-  #           msg.setStandardButtons(
-  #             QMessageBox.StandardButton.Yes
-  #             | QMessageBox.StandardButton.No
-  #           )
-  #           msg.setDefaultButton(QMessageBox.StandardButton.Yes)
-
-  #           if msg.exec() == QMessageBox.StandardButton.Yes:
-  #             # 4. Restart Logic
-  #             python = sys.executable
-  #             print(python, *sys.orig_argv)
-  #             os.execl(python, *sys.orig_argv)
-  #         else:
-  #           print(
-  #             f"Update downloaded but {self.gameName}.py was not found."
-  #           )
-
-  #       except Exception as e:
-  #         print(f"Update failed: {e}")
-  #       finally:
-  #         shutil.rmtree(temp_dir, ignore_errors=True)
-
-  #     dl_thread.finished.connect(on_download_finished)
-  #     dl_thread.start()
-  #     # Keep reference to prevent GC
-  #     self.activeDownloads["launcher_update"] = dl_thread
-
-  #   fetcher.finished.connect(on_metadata_fetched)
-  #   fetcher.start()
-  #   # Keep reference to prevent GC
-  #   self.activeDownloads["launcher_metadata"] = fetcher
   def updateSubLauncher(
     self,
     launcherSettings: Optional[Config] = None,
@@ -1797,7 +1699,7 @@ class Launcher(QWidget):
                 if data.path and os.path.exists(data.path):
                   os.remove(data.path)
                   shutil.move(
-                      os.path.join(root, f"{tag}.py"), data.path
+                    os.path.join(root, f"{tag}.py"), data.path
                   )
                   found = True
                 break
@@ -1835,8 +1737,8 @@ class Launcher(QWidget):
     if msg.exec() == QMessageBox.StandardButton.Yes:
       script_path = f'"{os.path.abspath(sys.argv[0])}"'
       executable = f'"{sys.executable}"'
-      
-      # We pass the quoted executable as the path and arg0, 
+
+      # We pass the quoted executable as the path and arg0,
       # then the quoted script path, then the rest of the args.
       os.execl(sys.executable, executable, script_path, *sys.argv[1:])
 
@@ -1952,6 +1854,8 @@ def run(config: Config, module_name):
   _current_window.show()
 
   if is_new_app:  # Only exec if loop isn't running
+    if LAUNCHER_TO_LAUNCH in modules:
+      run(modules[LAUNCHER_TO_LAUNCH], LAUNCHER_TO_LAUNCH)
     sys.exit(app.exec())
 
 
@@ -2005,9 +1909,6 @@ def findAllLaunchables():
       module_name = filename[:-3]
       try:
         importlib.import_module(module_name)
-        if module_name == LAUNCHER_TO_LAUNCH:
-          run(modules[module_name], module_name)
-          return
       except Exception as e:
         paths[module_name] = os.path.abspath(filename)
         modules[module_name] = Config(
