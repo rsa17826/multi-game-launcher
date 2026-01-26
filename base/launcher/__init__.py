@@ -1724,11 +1724,15 @@ class Launcher(QWidget):
 
     # If no data object provided (e.g. from Settings button),
     # create a mock one or find the one matching the current game
-    # if data is None:
-    #   # Assuming current running file is the target
-    #   assert sys.modules[self.gameName].__file__ is not None
-    #   current_path = os.path.abspath(sys.modules[self.gameName].__file__)
-    #   data = ItemListData(version=self.gameName, path=current_path, release=None)
+    if data is None:
+      # Assuming current running file is the target
+      current_path = os.path.abspath(sys.modules[self.gameName].__file__)  # type: ignore
+      data = ItemListData(
+        version=self.gameName,
+        path=current_path,
+        release=None,
+        status=Statuses.gameSelector,
+      )
 
     tag = data.version
     api_url = f"https://api.github.com/repos/{ls.LAUNCHER_GH_USERNAME or ls.GH_USERNAME}/{ls.LAUNCHER_GH_REPO or ls.GH_REPO}/releases"
@@ -1741,6 +1745,7 @@ class Launcher(QWidget):
       if not releases:
         return
       data.release = releases[0]
+      assert data.release is not None
 
       asset_name = ls.LAUNCHER_ASSET_NAME
       asset = next(
@@ -1759,9 +1764,9 @@ class Launcher(QWidget):
       os.makedirs(dest_dir, exist_ok=True)
 
       # Update UI if widget exists
-      widget = self.activeItemRefs.get(tag)
-      if widget:
-        widget.setModeUnknownEnd()
+      widget: VersionItemWidget | None = self.activeItemRefs.get(tag)
+      if isinstance(widget, VersionItemWidget):
+        widget.setModeKnownEnd()
 
       dl_thread = AssetDownloadThread(asset["browser_download_url"], out_file)
       self.activeDownloads[tag] = dl_thread
@@ -1787,7 +1792,9 @@ class Launcher(QWidget):
                   shutil.move(
                     os.path.join(root, f"{tag}.py"), data.path
                   )
-                  QTimer.singleShot(100, bind(self.showRestartPrompt, tag))  # New helper below
+                  QTimer.singleShot(
+                    1000, bind(self.showRestartPrompt, tag)
+                  )
                 break
         except Exception as e:
           print(f"Update failed for {tag}: {e}")
@@ -1795,13 +1802,16 @@ class Launcher(QWidget):
           if tag in self.downloadingVersions:
             self.downloadingVersions.remove(tag)
           self.activeDownloads.pop(tag, None)
+          self.activeDownloads.pop(f"meta_{tag}", None)
           shutil.rmtree(dest_dir, ignore_errors=True)
           self.updateVersionList()
 
       dl_thread.finished.connect(on_finished)
+      dl_thread.finished.connect(dl_thread.deleteLater)
       dl_thread.start()
 
     fetcher.finished.connect(on_metadata)
+    fetcher.finished.connect(fetcher.deleteLater)
     self.activeDownloads[f"meta_{tag}"] = fetcher
     fetcher.start()
 
@@ -1815,8 +1825,7 @@ class Launcher(QWidget):
       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
     )
     if msg.exec() == QMessageBox.StandardButton.Yes:
-      python = sys.executable
-      os.execl(python, python, *sys.argv)
+      os.execl(sys.executable, *sys.argv)
 
   def openFile(self, p):
     return QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.abspath(p)))
