@@ -1241,6 +1241,7 @@ class Launcher(QWidget):
       self.close()
 
   def __init__(self, config: Config, module_name):
+    global launcherUpdateAlreadyChecked
     super().__init__()
     self.gameName = module_name
     self.releaseFetchingThread: Any = None
@@ -1315,7 +1316,6 @@ class Launcher(QWidget):
       self.mainProgressBar.setModeDisabled()
       if not OFFLINE:
         if self.settings.checkForLauncherUpdatesWhenOpening:
-          global launcherUpdateAlreadyChecked
           if not launcherUpdateAlreadyChecked:
             self.updateLauncher()
           launcherUpdateAlreadyChecked = True
@@ -1354,7 +1354,6 @@ class Launcher(QWidget):
     self.updateVersionList()
     if not OFFLINE:
       if self.settings.checkForLauncherUpdatesWhenOpening:
-        global launcherUpdateAlreadyChecked
         if not launcherUpdateAlreadyChecked:
           self.updateLauncher()
         launcherUpdateAlreadyChecked = True
