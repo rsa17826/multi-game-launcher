@@ -1325,6 +1325,7 @@ class Launcher(QWidget):
       return
     self.API_URL = f"https://api.github.com/repos/{self.config.GH_USERNAME}/{self.config.GH_REPO}/releases"
     os.makedirs(os.path.join(LAUNCHER_START_PATH, "launcherData"), exist_ok=True)
+    os.makedirs("images", exist_ok=True)
     os.makedirs(
       os.path.join(
         LAUNCHER_START_PATH if True else "",
