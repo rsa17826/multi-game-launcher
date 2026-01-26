@@ -6,6 +6,6 @@ if exist ./.venv (
   call ./.venv/scripts/activate
   pip install -e ./base
   pip install -r ./base/requirements.txt
-  rmdir /S /Q ./base/launcher.egg-info
+  rmdir /S /Q "./base/launcher.egg-info"
 )
 python ./base/launcher/__init__.py %*
