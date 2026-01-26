@@ -1422,16 +1422,14 @@ class Launcher(QWidget):
           )
       if data.path:
         newAction("Open Folder", lambda: self.openFile(os.path.dirname(data.path)))  # type: ignore
-        # ???  TODO
         newAction(
           f"Delete {data.version} Launcher", lambda: os.remove(data.path)  # type: ignore
         )
     else:
       if data.path:
         newAction("Open Folder", lambda: self.openFile(data.path))  # type: ignore
-        # ???  TODO
         newAction(
-          f"Delete Version {data.version}", lambda: os.remove(data.path)  # type: ignore
+          f"Delete Version {data.version}", lambda: shutil.rmtree(data.path)  # type: ignore
         )
       if data.release:
         newAction(
@@ -2053,3 +2051,6 @@ if __name__ == "__main__":
 #             if True
 #             else ""
 # self.settings.centralGameDataLocations
+
+# TODO
+# make ui reload when deleting things
