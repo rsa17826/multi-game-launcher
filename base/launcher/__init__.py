@@ -1680,7 +1680,7 @@ class Launcher(QWidget):
 
       def on_finished(path):
         widget.setModeDisabled()
-        found = False
+        found = {"py": False, "png": False}
         extracted = False
         try:
           if path.endswith(".zip"):
@@ -1695,13 +1695,27 @@ class Launcher(QWidget):
           if extracted:
             # Replacement logic
             for root, _, files in os.walk(dest_dir):
+              if f"{tag}.png" in files:
+                if data.path and os.path.exists(data.path):
+                  imgpath = os.path.join(
+                    os.path.dirname(data.path),
+                    "images",
+                    f"{tag}.png",
+                  )
+                  os.remove(imgpath)
+                  shutil.move(
+                    os.path.join(root, f"{tag}.png"),
+                    imgpath,
+                  )
+                  found["png"] = True
               if f"{tag}.py" in files:
                 if data.path and os.path.exists(data.path):
                   os.remove(data.path)
                   shutil.move(
                     os.path.join(root, f"{tag}.py"), data.path
                   )
-                  found = True
+                  found["py"] = True
+              if found["png"] and found["py"]:
                 break
         except Exception as e:
           print(f"Update failed for {tag}: {e}")
@@ -1712,7 +1726,7 @@ class Launcher(QWidget):
           self.activeDownloads.pop(f"meta_{tag}", None)
           shutil.rmtree(dest_dir, ignore_errors=True)
           self.updateVersionList()
-          if found:
+          if found["py"]:
             self.showRestartPrompt(tag)
 
       dl_thread.progress.connect(on_progress)
@@ -1855,7 +1869,7 @@ def run(config: Config, module_name):
 
   if is_new_app:  # Only exec if loop isn't running
     if LAUNCHER_TO_LAUNCH in modules:
-      lwin=_current_window
+      lwin = _current_window
       run(modules[LAUNCHER_TO_LAUNCH], LAUNCHER_TO_LAUNCH)
       lwin.close()
     sys.exit(app.exec())
