@@ -619,10 +619,19 @@ class Launcher(QWidget):
       subprocess.check_call(
         ["git", "reset", "--hard", "origin/main"], cwd=local_dir
       )
-      subprocess.check_call(
-        ["git", "pull", "--force", "origin", "main"], cwd=local_dir
+      result = subprocess.run(
+        ["git", "pull", "--force", "origin", "main"],
+        cwd=local_dir,
+        capture_output=True,
+        text=True
       )
-      print("Update successful!")
+
+      if "Already up to date." in result.stdout:
+        print("No updates found. The repository is already up to date.")
+      else:
+        print("Update successful!")
+        self.showRestartPrompt("Launcher updated successfully.")
+
       self.showRestartPrompt(f"Launcher updated successfully.")
     except subprocess.CalledProcessError as e:
       print("Error during update:", e)
