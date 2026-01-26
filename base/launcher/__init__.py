@@ -631,8 +631,6 @@ class Launcher(QWidget):
       else:
         print("Update successful!")
         self.showRestartPrompt("Launcher updated successfully.")
-
-      self.showRestartPrompt(f"Launcher updated successfully.")
     except subprocess.CalledProcessError as e:
       print("Error during update:", e)
 
