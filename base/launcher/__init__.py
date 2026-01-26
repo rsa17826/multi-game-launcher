@@ -1,3 +1,7 @@
+# @name a
+# @regex (?<=[^ ])  #
+# @replace  #
+# @endregex
 import shutil
 import inspect
 from dataclasses import dataclass
@@ -65,13 +69,13 @@ class ArgumentData:
 
 
 def checkArgs(*argData: ArgumentData) -> list[Any]:
-  args: List[str] = sys.argv[1:]  # Ignore the script name, only check arguments
+  args: List[str] = sys.argv[1:] # Ignore the script name, only check arguments
   if "--" in args:
     beforeDashArgs = args[: args.index("--")]
   else:
     beforeDashArgs = args
-  # print(beforeDashArgs, args)
-  # Initialize results with the default values from argData
+ # print(beforeDashArgs, args)
+ # Initialize results with the default values from argData
   results: List[Any | None] = [data.default for data in argData]
 
   i = 0
@@ -91,25 +95,32 @@ def checkArgs(*argData: ArgumentData) -> list[Any]:
     if foundKey:
       afterCount: int = foundKey.afterCount
       idx: int | None = next(
-        (index for index, e in enumerate(argData) if (e.key == nextArg if isinstance(e.key, str) else nextArg in e.key)), None
+        (
+          index
+          for index, e in enumerate(argData)
+          if (
+            e.key == nextArg if isinstance(e.key, str) else nextArg in e.key
+          )
+        ),
+        None,
       )
       assert idx is not None
 
       if afterCount == 0:
         # If afterCount is 0, consume the key (do not use its value)
         beforeDashArgs.pop(i)
-        results[idx] = True  # True for a valid flag
+        results[idx] = True # True for a valid flag
 
       elif afterCount == 1:
         # If afterCount is 1, consume the next argument as the value for the key
         if i + 1 < len(beforeDashArgs):
           value = beforeDashArgs[i + 1]
-          beforeDashArgs.pop(i)  # Remove the key
-          beforeDashArgs.pop(i)  # Remove the value
-          results[idx] = value  # Then the value
+          beforeDashArgs.pop(i) # Remove the key
+          beforeDashArgs.pop(i) # Remove the value
+          results[idx] = value # Then the value
         else:
           # If no argument follows the key, use the default
-          beforeDashArgs.pop(i)  # Remove the key
+          beforeDashArgs.pop(i) # Remove the key
           print(
             "err",
             nextArg,
@@ -146,12 +157,12 @@ def checkArgs(*argData: ArgumentData) -> list[Any]:
     else:
       # If the key is invalid, just skip it and move to the next argument
       beforeDashArgs.pop(i)
-      continue  # Skip to the next argument
+      continue # Skip to the next argument
 
     # Skip over the processed argument
     continue
 
-  # print(results)
+ # print(results)
   return results
 
 
@@ -185,8 +196,10 @@ class Statuses(Enum):
   gameSelector = 2
   loadingInfo = 3
   localOnly = 4
-  # downloading = 2
-  # waitingForDownload = 3
+
+
+# downloading = 2
+# waitingForDownload = 3
 
 
 from typing import Type
@@ -423,14 +436,14 @@ class VersionItemWidget(QWidget):
     self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
     self.setStyleSheet("background: transparent; border: none;")
     self.image_label = QLabel()
-    self.image_label.setFixedSize(50, 50)  # Set a standard thumbnail size
+    self.image_label.setFixedSize(50, 50) # Set a standard thumbnail size
     self.label = QLabel(text)
     color_hex = color.name
     self.label.setStyleSheet(f"background: transparent; color: {color_hex};")
 
     self.qblayout = QHBoxLayout(self)
     self.icon_label = QLabel()
-    self.icon_label.setFixedSize(32, 32)  # Standard thumbnail size
+    self.icon_label.setFixedSize(32, 32) # Standard thumbnail size
     self.icon_label.setScaledContents(True)
     self.icon_label.hide()
     self.qblayout.addWidget(self.icon_label)
@@ -686,7 +699,7 @@ class Launcher(QWidget):
         value = widget.value()
       elif isinstance(widget, QComboBox):
         value = widget.currentData()
-        if widget.usesEnum:  # type: ignore
+        if widget.usesEnum: # type: ignore
           value = value.value
       else:
         continue
@@ -1326,7 +1339,7 @@ class Launcher(QWidget):
       self.VERSIONS_DIR = "///"
       self.foundReleases = list(
         map(
-          lambda x: {"tag_name": x, "config": config.configs[x], "path": paths[x]}, config.configs  # type: ignore
+          lambda x: {"tag_name": x, "config": config.configs[x], "path": paths[x]}, config.configs # type: ignore
         )
       )
       self.updateVersionList()
@@ -1421,15 +1434,15 @@ class Launcher(QWidget):
             ),
           )
       if data.path:
-        newAction("Open Folder", lambda: self.openFile(os.path.dirname(data.path)))  # type: ignore
+        newAction("Open Folder", lambda: self.openFile(os.path.dirname(data.path))) # type: ignore
         newAction(
-          f"Delete {data.version} Launcher", lambda: os.remove(data.path)  # type: ignore
+          f"Delete {data.version} Launcher", lambda: os.remove(data.path) # type: ignore
         )
     else:
       if data.path:
-        newAction("Open Folder", lambda: self.openFile(data.path))  # type: ignore
+        newAction("Open Folder", lambda: self.openFile(data.path)) # type: ignore
         newAction(
-          f"Delete Version {data.version}", lambda: shutil.rmtree(data.path)  # type: ignore
+          f"Delete Version {data.version}", lambda: shutil.rmtree(data.path) # type: ignore
         )
       if data.release:
         newAction(
@@ -1704,7 +1717,7 @@ class Launcher(QWidget):
     # create a mock one or find the one matching the current game
     if data is None:
       # Assuming current running file is the target
-      current_path = os.path.abspath(sys.modules[self.gameName].__file__)  # type: ignore
+      current_path = os.path.abspath(sys.modules[self.gameName].__file__) # type: ignore
       data = ItemListData(
         version=self.gameName,
         path=current_path,
@@ -1773,21 +1786,21 @@ class Launcher(QWidget):
               if f"{tag}.png" in files:
                 if data.path and os.path.exists(data.path):
                   imgpath = os.path.join(
-                      os.path.dirname(data.path),
-                      "images",
-                      f"{tag}.png",
+                    os.path.dirname(data.path),
+                    "images",
+                    f"{tag}.png",
                   )
                   os.remove(imgpath)
                   shutil.move(
-                      os.path.join(root, f"{tag}.png"),
-                      imgpath,
+                    os.path.join(root, f"{tag}.png"),
+                    imgpath,
                   )
                   found["png"] = True
               if f"{tag}.py" in files:
                 if data.path and os.path.exists(data.path):
                   os.remove(data.path)
                   shutil.move(
-                      os.path.join(root, f"{tag}.py"), data.path
+                    os.path.join(root, f"{tag}.py"), data.path
                   )
                   found["py"] = True
               if found["png"] and found["py"]:
@@ -1906,10 +1919,10 @@ class Launcher(QWidget):
   ):
     node = QComboBox()
 
-    node.usesEnum = False  # type: ignore
+    node.usesEnum = False # type: ignore
     if isinstance(values, EnumMeta):
-      node.usesEnum = True  # type: ignore
-      node.usedEnum = values  # type: ignore
+      node.usesEnum = True # type: ignore
+      node.usedEnum = values # type: ignore
       for thing in values:
         node.addItem(thing.name, thing)
     elif isinstance(values, list):
@@ -1942,20 +1955,20 @@ def run(config: Config, module_name):
     app = QApplication(sys.argv)
     is_new_app = True
 
-  # Save the old geometry if a window is currently open
+ # Save the old geometry if a window is currently open
   _last_geometry = None
   if _current_window is not None:
     _last_geometry = _current_window.saveGeometry()
 
   _current_window = Launcher(config, module_name)
 
-  # Apply the saved geometry before showing the window
+ # Apply the saved geometry before showing the window
   if _last_geometry is not None:
     _current_window.restoreGeometry(_last_geometry)
 
   _current_window.show()
 
-  if is_new_app:  # Only exec if loop isn't running
+  if is_new_app: # Only exec if loop isn't running
     if LAUNCHER_TO_LAUNCH in modules:
       lwin = _current_window
       run(modules[LAUNCHER_TO_LAUNCH], LAUNCHER_TO_LAUNCH)
@@ -1969,15 +1982,15 @@ _is_selector_loading = False
 
 
 def loadConfig(config: Config):
-  # 1. Get the actual main module (the one running the loop)
+ # 1. Get the actual main module (the one running the loop)
   main_app = sys.modules["__main__"]
 
   caller_frame = inspect.stack()[1]
   caller_filename = caller_frame.filename
   module_name = Path(caller_filename).stem
-  # 2. Check if the main app has the 'modules' list (meaning we are in the Selector)
-  # _is_selector_loading is for if ran like `launcher`
-  # hasattr(main_app, "modules") and isinstance(main_app.modules, dict) is for if ran like `python ./__init__.py`
+ # 2. Check if the main app has the 'modules' list (meaning we are in the Selector)
+ # _is_selector_loading is for if ran like `launcher`
+ # hasattr(main_app, "modules") and isinstance(main_app.modules, dict) is for if ran like `python ./__init__.py`
   if _is_selector_loading or (
     hasattr(main_app, "modules") and isinstance(main_app.modules, dict)
   ):
