@@ -51,14 +51,17 @@ import hashlib
 
 @dataclass
 class ArgumentData:
-  key: str
+  key: str | list[str]
   afterCount: int
   default: Optional[Any] = None
 
   def __post_init__(self):
     if self.afterCount == 0:
       self.default = False
-    self.key = self.key.lstrip("-")
+    if isinstance(self.key, str):
+      self.key = self.key.lstrip("-")
+    else:
+      self.key = [*map(lambda x: x.lstrip("-"), self.key)]
 
 
 def checkArgs(*argData: ArgumentData) -> list[Any]:
@@ -69,19 +72,27 @@ def checkArgs(*argData: ArgumentData) -> list[Any]:
     beforeDashArgs = args
   # print(beforeDashArgs, args)
   # Initialize results with the default values from argData
-  results = [data.default for data in argData]
-  argData_dict = {
-    data.key: data for data in argData
-  }  # Map keys to their ArgumentData
+  results: List[Any | None] = [data.default for data in argData]
 
   i = 0
   while i < len(beforeDashArgs):
-    key = beforeDashArgs[i].lstrip("-")
+    nextArg: str = beforeDashArgs[i].lstrip("-")
+    foundKey: ArgumentData | None = None
+    for testData in argData:
+      if testData.key is str:
+        if testData.key == nextArg:
+          foundKey = testData
+          break
+      else:
+        if nextArg in testData.key:
+          foundKey = testData
+          break
 
-    if key in argData_dict:
-      data = argData_dict[key]
-      afterCount = data.afterCount
-      idx = next((index for index, e in enumerate(argData) if e.key == key), None)
+    if foundKey:
+      afterCount: int = foundKey.afterCount
+      idx: int | None = next(
+        (index for index, e in enumerate(argData) if (e.key == nextArg if isinstance(e.key, str) else nextArg in e.key)), None
+      )
       assert idx is not None
 
       if afterCount == 0:
@@ -101,7 +112,7 @@ def checkArgs(*argData: ArgumentData) -> list[Any]:
           beforeDashArgs.pop(i)  # Remove the key
           print(
             "err",
-            key,
+            nextArg,
             "requires",
             afterCount,
             "args",
@@ -109,7 +120,7 @@ def checkArgs(*argData: ArgumentData) -> list[Any]:
             len(beforeDashArgs),
             "args",
           )
-          results[idx] = data.default
+          results[idx] = foundKey.default
 
       elif afterCount > 1:
         # If afterCount > 1, return the next `afterCount` arguments
@@ -122,7 +133,7 @@ def checkArgs(*argData: ArgumentData) -> list[Any]:
         else:
           print(
             "err",
-            key,
+            nextArg,
             "requires",
             afterCount,
             "args",
@@ -148,11 +159,14 @@ selectorConfig = None
 
 LAUNCHER_START_PATH = os.path.abspath(os.path.dirname(__file__))
 # asdadsas
-OFFLINE, LAUNCHER_TO_LAUNCH = checkArgs(
+OFFLINE, LAUNCHER_TO_LAUNCH, TRY_UPDATE, HEADLESS, VERSION = checkArgs(
   ArgumentData(key="offline", afterCount=0),
   ArgumentData(key="launcherName", afterCount=1),
+  ArgumentData(key="tryupdate", afterCount=0),
+  ArgumentData(key=["silent", "headless"], afterCount=0),
+  ArgumentData(key="version", afterCount=1),
 )
-print(OFFLINE, LAUNCHER_TO_LAUNCH)
+# print(HEADLESS)
 LOCAL_COLOR = Qt.GlobalColor.green
 ERROR_COLOR = Qt.GlobalColor.darkRed
 LOCAL_ONLY_COLOR = Qt.GlobalColor.yellow
@@ -1761,21 +1775,21 @@ class Launcher(QWidget):
               if f"{tag}.png" in files:
                 if data.path and os.path.exists(data.path):
                   imgpath = os.path.join(
-                    os.path.dirname(data.path),
-                    "images",
-                    f"{tag}.png",
+                      os.path.dirname(data.path),
+                      "images",
+                      f"{tag}.png",
                   )
                   os.remove(imgpath)
                   shutil.move(
-                    os.path.join(root, f"{tag}.png"),
-                    imgpath,
+                      os.path.join(root, f"{tag}.png"),
+                      imgpath,
                   )
                   found["png"] = True
               if f"{tag}.py" in files:
                 if data.path and os.path.exists(data.path):
                   os.remove(data.path)
                   shutil.move(
-                    os.path.join(root, f"{tag}.py"), data.path
+                      os.path.join(root, f"{tag}.py"), data.path
                   )
                   found["py"] = True
               if found["png"] and found["py"]:
