@@ -1196,14 +1196,14 @@ class Launcher(QWidget):
 
       isLastRanVersion = 1 if version == versionThatWasLastRan and not isNotDownloaded else 0
 
-      version_is_numeric = 1 if re.match(r"^\d+$", version) else 0
+      version_is_numeric = 1 if re.match(r"^-?\d+$", version) else 0
       numeric_value = int(version) if version_is_numeric else 0
 
       return (
         isLastRanVersion,
         (1 if (version in self.downloadingVersions) else 0),
         isLocalOnly,
-        isNotDownloaded,
+        isNotDownloaded if self.settings.sortByDownloadState else 0,
         version_is_numeric,
         numeric_value if version_is_numeric else version,
       )

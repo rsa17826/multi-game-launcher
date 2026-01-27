@@ -24,8 +24,7 @@ the versions are sorted by:
  - the most recently played version
  - downloads in progress
  - downloads waiting to start
- - other installed versions
- - not installed versions
+ - other versions
 
 all groups are sorted by largest numbers first
 
