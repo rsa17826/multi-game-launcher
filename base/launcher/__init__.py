@@ -172,7 +172,7 @@ LAUNCHER_START_PATH = os.path.abspath(os.path.dirname(__file__))
 # asdadsas
 OFFLINE, LAUNCHER_TO_LAUNCH, TRY_UPDATE, HEADLESS, VERSION = checkArgs(
   ArgumentData(key="offline", afterCount=0),
-  ArgumentData(key="launcherName", afterCount=1),
+  ArgumentData(key=["launcherName", "startLauncher"], afterCount=1),
   ArgumentData(key="tryupdate", afterCount=0),
   ArgumentData(key=["silent", "headless"], afterCount=0),
   ArgumentData(key="version", afterCount=1),
