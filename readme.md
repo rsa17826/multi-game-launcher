@@ -6,11 +6,11 @@ a sample script can be found [here](https://github.com/rsa17826/vex-plus-plus/bl
 
 when opening the launcher it will look like
 
-![launcher selector img](./_ghImages/launcherSelector.png)
+![launcher selector img](./_/_ghImages/launcherSelector.png)
 
 to open a game launcher double click on the item when inside a launcher it can look like this
 
-![launcher img](./_ghImages/launcher.png)
+![launcher img](./_/_ghImages/launcher.png)
 
 orange bar is waiting to download.
 
@@ -31,5 +31,9 @@ all groups are sorted by largest numbers first
 
 to remove a game version or launcher right click on the launcher or game version and press delete
 
-![rclick menu](./_ghImages/rclickmenu1.png)
-![rclick menu](./_ghImages/rclickmenu2.png)
+![rclick menu](./_/_ghImages/rclickmenu1.png)
+![rclick menu](./_/_ghImages/rclickmenu2.png)
+
+-------
+
+for if making a launcher for this there is a .url file that can be used located at [./_/base launcher files.url](./_/base%20launcher%20files.url) that points to this repo
