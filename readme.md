@@ -41,4 +41,4 @@ for if making a launcher for this there is a .url file that can be used located 
 <!-- if protocol handle is registered links like multi-game-launcher:downloadLauncher/https://github.com/rsa17826/vex-plus-plus/blob/main/launcher/vex%2B%2B.py -->
 <!-- if protocol handle is registered links like [this](multi-game-launcher:downloadLauncher/vex++/https://github.com/rsa17826/vex-plus-plus/releases/latest/download/launcher.zip) -->
 
-if protocol handle is registered links like <a href="multi-game-launcher:downloadLauncher/vex++/rsa17826/vex-plus-plus/launcher.zip">this</a>
+if protocol handle is registered links like [this](multi-game-launcher://downloadLauncher/vex++/rsa17826/vex-plus-plus/launcher.zip)
