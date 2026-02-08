@@ -143,7 +143,9 @@ def checkArgs(*argData: ArgumentData, useArgs: list[str] | None = None) -> list[
         # If afterCount > 1, return the next `afterCount` arguments
         if len(argsBeingUsed) >= i + 1 + afterCount:
           values = argsBeingUsed[i + 1 : i + 1 + afterCount]
-          argsBeingUsed = argsBeingUsed[:i] + argsBeingUsed[i + 1 + afterCount :]
+          argsBeingUsed = (
+            argsBeingUsed[:i] + argsBeingUsed[i + 1 + afterCount :]
+          )
           results[idx] = values
         else:
           print(
@@ -174,16 +176,22 @@ selectorConfig = None
 
 LAUNCHER_START_PATH = os.path.abspath(os.path.dirname(__file__))
 # asdadsas
-OFFLINE, LAUNCHER_TO_LAUNCH, TRY_UPDATE, HEADLESS, VERSION, REGISTER_PROTOCOLS, DOWNLOAD_LAUNCHER = (
-  checkArgs(
-    ArgumentData(key="offline", afterCount=0),
-    ArgumentData(key=["launcherName", "startLauncher"], afterCount=1),
-    ArgumentData(key="tryupdate", afterCount=0),
-    ArgumentData(key=["silent", "headless"], afterCount=0),
-    ArgumentData(key="version", afterCount=1),
-    ArgumentData(key="registerProtocols", afterCount=0),
-    ArgumentData(key="downloadLauncher", afterCount=3),
-  )
+(
+  OFFLINE,
+  LAUNCHER_TO_LAUNCH,
+  TRY_UPDATE,
+  HEADLESS,
+  VERSION,
+  REGISTER_PROTOCOLS,
+  DOWNLOAD_LAUNCHER,
+) = checkArgs(
+  ArgumentData(key="offline", afterCount=0),
+  ArgumentData(key=["launcherName", "startLauncher"], afterCount=1),
+  ArgumentData(key="tryupdate", afterCount=0),
+  ArgumentData(key=["silent", "headless"], afterCount=0),
+  ArgumentData(key="version", afterCount=1),
+  ArgumentData(key="registerProtocols", afterCount=0),
+  ArgumentData(key="downloadLauncher", afterCount=4),
 )
 
 
@@ -193,14 +201,16 @@ from PROTO import PROTO
 def protoCalled(msg: str): # type: ignore
   msg: list[str] = msg.split("/")
   global OFFLINE, LAUNCHER_TO_LAUNCH, TRY_UPDATE, HEADLESS, VERSION, DOWNLOAD_LAUNCHER
-  OFFLINE, LAUNCHER_TO_LAUNCH, TRY_UPDATE, HEADLESS, VERSION, DOWNLOAD_LAUNCHER = checkArgs(
-    ArgumentData(key="offline", afterCount=0),
-    ArgumentData(key=["launcherName", "startLauncher"], afterCount=1),
-    ArgumentData(key="tryupdate", afterCount=0),
-    ArgumentData(key=["silent", "headless"], afterCount=0),
-    ArgumentData(key="version", afterCount=1),
-    ArgumentData(key="downloadLauncher", afterCount=3),
-    useArgs=msg,
+  OFFLINE, LAUNCHER_TO_LAUNCH, TRY_UPDATE, HEADLESS, VERSION, DOWNLOAD_LAUNCHER = (
+    checkArgs(
+      ArgumentData(key="offline", afterCount=0),
+      ArgumentData(key=["launcherName", "startLauncher"], afterCount=1),
+      ArgumentData(key="tryupdate", afterCount=0),
+      ArgumentData(key=["silent", "headless"], afterCount=0),
+      ArgumentData(key="version", afterCount=1),
+      ArgumentData(key="downloadLauncher", afterCount=4),
+      useArgs=msg,
+    )
   )
   # match msg[0]:
   #   case "downloadLauncher":
@@ -1401,6 +1411,26 @@ class Launcher(QWidget):
     self.loadLocalVersions()
 
     main_layout.addWidget(self.newButton("Settings", self.openSettings))
+    if DOWNLOAD_LAUNCHER:
+      sd = SettingsData()
+      sd.LAUNCHER_GH_USERNAME = DOWNLOAD_LAUNCHER[1] # type: ignore
+      sd.LAUNCHER_GH_REPO = DOWNLOAD_LAUNCHER[2] # type: ignore
+      sd.LAUNCHER_ASSET_NAME = DOWNLOAD_LAUNCHER[3] # type: ignore
+      self.updateSubLauncher(
+        sd, # type: ignore
+        ItemListData(
+          path=os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "../..",
+            DOWNLOAD_LAUNCHER[0] + ".py",
+          ),
+          release=None,
+          status=Statuses.gameSelector,
+          version=DOWNLOAD_LAUNCHER[0],
+        ),
+        self.mainProgressBar,
+      )
+      print(DOWNLOAD_LAUNCHER, "DOWNLOAD_LAUNCHER")
 
     if self.config.configs is not None:
       self.VERSIONS_DIR = "///"
@@ -1444,8 +1474,6 @@ class Launcher(QWidget):
         if not launcherUpdateAlreadyChecked:
           self.updateLauncher()
         launcherUpdateAlreadyChecked = True
-    if DOWNLOAD_LAUNCHER:
-      print(DOWNLOAD_LAUNCHER, "DOWNLOAD_LAUNCHER")
     if not OFFLINE and self.settings.fetchOnLoad:
       self.startFetch(max_pages=self.settings.maxPagesOnLoad)
       self.releaseFetchingThread.error.connect(
@@ -1814,7 +1842,10 @@ class Launcher(QWidget):
     out_file = os.path.join(dest_dir, ls.LAUNCHER_ASSET_NAME)
     os.makedirs(dest_dir, exist_ok=True)
 
-    dl_thread = AssetDownloadThread(f"https://github.com/{ls.LAUNCHER_GH_USERNAME or ls.GH_USERNAME}/{ls.LAUNCHER_GH_REPO or ls.GH_REPO}/releases/latest/download/{ls.LAUNCHER_ASSET_NAME}", out_file)
+    dl_thread = AssetDownloadThread(
+      f"https://github.com/{ls.LAUNCHER_GH_USERNAME or ls.GH_USERNAME}/{ls.LAUNCHER_GH_REPO or ls.GH_REPO}/releases/latest/download/{ls.LAUNCHER_ASSET_NAME}",
+      out_file,
+    )
     self.activeDownloads[tag] = dl_thread
 
     def on_finished(path):
@@ -1835,24 +1866,24 @@ class Launcher(QWidget):
           # Replacement logic
           for root, _, files in os.walk(dest_dir):
             if f"{tag}.png" in files:
-              if data.path and os.path.exists(data.path):
+              if data.path:
                 imgpath = os.path.join(
                   os.path.dirname(data.path),
                   "images",
                   f"{tag}.png",
                 )
-                os.remove(imgpath)
+                if os.path.exists(imgpath):
+                  os.remove(imgpath)
                 shutil.move(
                   os.path.join(root, f"{tag}.png"),
                   imgpath,
                 )
                 found["png"] = True
             if f"{tag}.py" in files:
-              if data.path and os.path.exists(data.path):
-                os.remove(data.path)
-                shutil.move(
-                  os.path.join(root, f"{tag}.py"), data.path
-                )
+              if data.path:
+                if os.path.exists(data.path):
+                  os.remove(data.path)
+                shutil.move(os.path.join(root, f"{tag}.py"), data.path)
                 found["py"] = True
             if found["png"] and found["py"]:
               break
@@ -1872,6 +1903,7 @@ class Launcher(QWidget):
     dl_thread.finished.connect(on_finished)
     dl_thread.finished.connect(dl_thread.deleteLater)
     dl_thread.start()
+
   # def updateSubLauncher(
   #   self,
   #   launcherSettings: Optional[Config] = None,
@@ -2245,3 +2277,5 @@ if __name__ == "__main__":
 #             if True
 #             else ""
 # self.settings.centralGameDataLocations
+
+# TODO make del on launcher selector update ui
