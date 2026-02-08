@@ -210,7 +210,7 @@ def protoCalled(msg: str): # type: ignore
 
 
 if PROTO.isSelf("multi-game-launcher") or REGISTER_PROTOCOLS:
-  PROTO.add("multi-game-launcher", protoCalled)
+  PROTO.add("multi-game-launcher", protoCalled, True)
 
 # print(HEADLESS)
 LOCAL_COLOR = Qt.GlobalColor.green
