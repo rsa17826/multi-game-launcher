@@ -21,19 +21,24 @@ green text is installed.
 blue text is not installed.
 
 the versions are sorted by:
- - the most recently played version
- - downloads in progress
- - downloads waiting to start
- - other versions
+
+- the most recently played version
+- downloads in progress
+- downloads waiting to start
+- other versions
 
 all groups are sorted by largest numbers first
-
 
 to remove a game version or launcher right click on the launcher or game version and press delete
 
 ![rclick menu](./_/_ghImages/rclickmenu1.png)
 ![rclick menu](./_/_ghImages/rclickmenu2.png)
 
--------
+---
 
-for if making a launcher for this there is a .url file that can be used located at [./_/base launcher files.url](./_/base%20launcher%20files.url) that points to this repo
+for if making a launcher for this there is a .url file that can be used located at [./\_/base launcher files.url](./_/base%20launcher%20files.url) that points to this repo
+
+<!-- if protocol handle is registered links like multi-game-launcher:downloadLauncher/https://github.com/rsa17826/vex-plus-plus/blob/main/launcher/vex%2B%2B.py -->
+<!-- if protocol handle is registered links like [this](multi-game-launcher:downloadLauncher/vex++/https://github.com/rsa17826/vex-plus-plus/releases/latest/download/launcher.zip) -->
+
+if protocol handle is registered links like [this](multi-game-launcher:downloadLauncher/vex++/rsa17826/vex-plus-plus)

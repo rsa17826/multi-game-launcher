@@ -70,19 +70,23 @@ class ArgumentData:
       self.key = [*map(lambda x: x.lstrip("-"), self.key)]
 
 
-def checkArgs(*argData: ArgumentData) -> list[Any]:
-  args: List[str] = sys.argv[1:] # Ignore the script name, only check arguments
-  if "--" in args:
-    beforeDashArgs = args[: args.index("--")]
+def checkArgs(*argData: ArgumentData, useArgs: list[str] | None = None) -> list[Any]:
+  if not useArgs:
+    args: List[str] = sys.argv[1:] # Ignore the script name, only check arguments
+    if "--" in args:
+      beforeDashArgs = args[: args.index("--")]
+    else:
+      beforeDashArgs = args
+    argsBeingUsed = beforeDashArgs
   else:
-    beforeDashArgs = args
+    argsBeingUsed = useArgs.copy()
   # print(beforeDashArgs, args)
   # Initialize results with the default values from argData
   results: List[Any | None] = [data.default for data in argData]
 
   i = 0
-  while i < len(beforeDashArgs):
-    nextArg: str = beforeDashArgs[i].lstrip("-")
+  while i < len(argsBeingUsed):
+    nextArg: str = argsBeingUsed[i].lstrip("-")
     foundKey: ArgumentData | None = None
     for testData in argData:
       if testData.key is str:
@@ -110,19 +114,19 @@ def checkArgs(*argData: ArgumentData) -> list[Any]:
 
       if afterCount == 0:
         # If afterCount is 0, consume the key (do not use its value)
-        beforeDashArgs.pop(i)
+        argsBeingUsed.pop(i)
         results[idx] = True # True for a valid flag
 
       elif afterCount == 1:
         # If afterCount is 1, consume the next argument as the value for the key
-        if i + 1 < len(beforeDashArgs):
-          value = beforeDashArgs[i + 1]
-          beforeDashArgs.pop(i) # Remove the key
-          beforeDashArgs.pop(i) # Remove the value
+        if i + 1 < len(argsBeingUsed):
+          value = argsBeingUsed[i + 1]
+          argsBeingUsed.pop(i) # Remove the key
+          argsBeingUsed.pop(i) # Remove the value
           results[idx] = value # Then the value
         else:
           # If no argument follows the key, use the default
-          beforeDashArgs.pop(i) # Remove the key
+          argsBeingUsed.pop(i) # Remove the key
           print(
             "err",
             nextArg,
@@ -130,18 +134,16 @@ def checkArgs(*argData: ArgumentData) -> list[Any]:
             afterCount,
             "args",
             "but received",
-            len(beforeDashArgs),
+            len(argsBeingUsed),
             "args",
           )
           results[idx] = foundKey.default
 
       elif afterCount > 1:
         # If afterCount > 1, return the next `afterCount` arguments
-        if len(beforeDashArgs) >= i + 1 + afterCount:
-          values = beforeDashArgs[i + 1 : i + 1 + afterCount]
-          beforeDashArgs = (
-            beforeDashArgs[:i] + beforeDashArgs[i + 1 + afterCount :]
-          )
+        if len(argsBeingUsed) >= i + 1 + afterCount:
+          values = argsBeingUsed[i + 1 : i + 1 + afterCount]
+          argsBeingUsed = argsBeingUsed[:i] + argsBeingUsed[i + 1 + afterCount :]
           results[idx] = values
         else:
           print(
@@ -151,14 +153,14 @@ def checkArgs(*argData: ArgumentData) -> list[Any]:
             afterCount,
             "args",
             "but received",
-            len(beforeDashArgs),
+            len(argsBeingUsed),
             "args",
           )
-          beforeDashArgs = []
+          argsBeingUsed = []
 
     else:
       # If the key is invalid, just skip it and move to the next argument
-      beforeDashArgs.pop(i)
+      argsBeingUsed.pop(i)
       continue # Skip to the next argument
 
     # Skip over the processed argument
@@ -187,8 +189,22 @@ OFFLINE, LAUNCHER_TO_LAUNCH, TRY_UPDATE, HEADLESS, VERSION, REGISTER_PROTOCOLS =
 from PROTO import PROTO
 
 
-def protoCalled(msg):
-  pass
+def protoCalled(msg: str): # type: ignore
+  msg: list[str] = msg.split("/")
+  global OFFLINE, LAUNCHER_TO_LAUNCH, TRY_UPDATE, HEADLESS, VERSION
+  OFFLINE, LAUNCHER_TO_LAUNCH, TRY_UPDATE, HEADLESS, VERSION = checkArgs(
+    ArgumentData(key="offline", afterCount=0),
+    ArgumentData(key=["launcherName", "startLauncher"], afterCount=1),
+    ArgumentData(key="tryupdate", afterCount=0),
+    ArgumentData(key=["silent", "headless"], afterCount=0),
+    ArgumentData(key="version", afterCount=1),
+    useArgs=msg,
+  )
+  match msg[0]:
+    case "downloadLauncher":
+      print(msg)
+    case _:
+      print("failed to find valid match", msg)
 
 
 if PROTO.isSelf("multi-game-launcher") or REGISTER_PROTOCOLS:
@@ -1781,106 +1797,202 @@ class Launcher(QWidget):
       )
 
     tag = data.version
-    api_url = f"https://api.github.com/repos/{ls.LAUNCHER_GH_USERNAME or ls.GH_USERNAME}/{ls.LAUNCHER_GH_REPO or ls.GH_REPO}/releases"
-
-    fetcher = self.ReleaseFetchThread(
-      api_url, pat=self.settings.githubPat or None, max_pages=1
-    )
     if not widget:
       widget = self.activeItemRefs.get(tag)
     assert isinstance(widget, VersionItemWidget)
-    widget.setModeUnknownEnd()
+    widget.setModeKnownEnd()
 
-    def on_metadata(widget: VersionItemWidget, releases):
-      if not releases:
-        return
-      data.release = releases[0]
-      assert data.release is not None
-      widget.setModeKnownEnd()
+    def on_progress(progress):
+      widget.setProgress(progress)
 
-      def on_progress(progress):
-        widget.setProgress(progress)
+    self.downloadingVersions.append(tag)
+    dest_dir = os.path.join(
+      os.path.abspath(os.path.join(LAUNCHER_START_PATH, "-")), f"temp_{tag}"
+    )
+    out_file = os.path.join(dest_dir, ls.LAUNCHER_ASSET_NAME)
+    os.makedirs(dest_dir, exist_ok=True)
 
-      asset_name = ls.LAUNCHER_ASSET_NAME
-      asset = next(
-        (a for a in data.release.get("assets", []) if a["name"] == asset_name),
-        None,
-      )
+    dl_thread = AssetDownloadThread(f"https://github.com/{ls.LAUNCHER_GH_USERNAME or ls.GH_USERNAME}/{ls.LAUNCHER_GH_REPO or ls.GH_REPO}/releases/latest/download/{ls.LAUNCHER_ASSET_NAME}", out_file)
+    self.activeDownloads[tag] = dl_thread
 
-      if not asset or tag in self.downloadingVersions:
+    def on_finished(path):
+      widget.setModeDisabled()
+      found = {"py": False, "png": False}
+      extracted = False
+      try:
+        if path.endswith(".zip"):
+          with zipfile.ZipFile(path, "r") as z:
+            z.extractall(dest_dir)
+          extracted = True
+        elif path.endswith(".7z"):
+          with py7zr.SevenZipFile(path, "r") as z:
+            z.extractall(dest_dir)
+          extracted = True
+
+        if extracted:
+          # Replacement logic
+          for root, _, files in os.walk(dest_dir):
+            if f"{tag}.png" in files:
+              if data.path and os.path.exists(data.path):
+                imgpath = os.path.join(
+                  os.path.dirname(data.path),
+                  "images",
+                  f"{tag}.png",
+                )
+                os.remove(imgpath)
+                shutil.move(
+                  os.path.join(root, f"{tag}.png"),
+                  imgpath,
+                )
+                found["png"] = True
+            if f"{tag}.py" in files:
+              if data.path and os.path.exists(data.path):
+                os.remove(data.path)
+                shutil.move(
+                  os.path.join(root, f"{tag}.py"), data.path
+                )
+                found["py"] = True
+            if found["png"] and found["py"]:
+              break
+      except Exception as e:
+        print(f"Update failed for {tag}: {e}")
+      finally:
+        if tag in self.downloadingVersions:
+          self.downloadingVersions.remove(tag)
+        self.activeDownloads.pop(tag, None)
         self.activeDownloads.pop(f"meta_{tag}", None)
-        return
+        shutil.rmtree(dest_dir, ignore_errors=True)
+        self.updateVersionList()
+        if found["py"]:
+          self.showRestartPrompt(f"{tag} updated successfully.")
 
-      self.downloadingVersions.append(tag)
-      dest_dir = os.path.join(
-        os.path.abspath(os.path.join(LAUNCHER_START_PATH, "-")), f"temp_{tag}"
-      )
-      out_file = os.path.join(dest_dir, asset["name"])
-      os.makedirs(dest_dir, exist_ok=True)
+    dl_thread.progress.connect(on_progress)
+    dl_thread.finished.connect(on_finished)
+    dl_thread.finished.connect(dl_thread.deleteLater)
+    dl_thread.start()
+  # def updateSubLauncher(
+  #   self,
+  #   launcherSettings: Optional[Config] = None,
+  #   data: Optional[ItemListData] = None,
+  #   widget: Optional[VersionItemWidget] = None,
+  # ):
+  #   """Refactored unified update logic for the launcher or sub-modules."""
+  #   # Fallback to current config if none provided
+  #   ls = launcherSettings or self.config
 
-      dl_thread = AssetDownloadThread(asset["browser_download_url"], out_file)
-      self.activeDownloads[tag] = dl_thread
+  #   # If no data object provided (e.g. from Settings button),
+  #   # create a mock one or find the one matching the current game
+  #   if data is None:
+  #     # Assuming current running file is the target
+  #     current_path = os.path.abspath(sys.modules[self.gameName].__file__) # type: ignore
+  #     data = ItemListData(
+  #       version=self.gameName,
+  #       path=current_path,
+  #       release=None,
+  #       status=Statuses.gameSelector,
+  #     )
 
-      def on_finished(path):
-        widget.setModeDisabled()
-        found = {"py": False, "png": False}
-        extracted = False
-        try:
-          if path.endswith(".zip"):
-            with zipfile.ZipFile(path, "r") as z:
-              z.extractall(dest_dir)
-            extracted = True
-          elif path.endswith(".7z"):
-            with py7zr.SevenZipFile(path, "r") as z:
-              z.extractall(dest_dir)
-            extracted = True
+  #   tag = data.version
+  #   api_url = f"https://api.github.com/repos/{ls.LAUNCHER_GH_USERNAME or ls.GH_USERNAME}/{ls.LAUNCHER_GH_REPO or ls.GH_REPO}/releases"
 
-          if extracted:
-            # Replacement logic
-            for root, _, files in os.walk(dest_dir):
-              if f"{tag}.png" in files:
-                if data.path and os.path.exists(data.path):
-                  imgpath = os.path.join(
-                    os.path.dirname(data.path),
-                    "images",
-                    f"{tag}.png",
-                  )
-                  os.remove(imgpath)
-                  shutil.move(
-                    os.path.join(root, f"{tag}.png"),
-                    imgpath,
-                  )
-                  found["png"] = True
-              if f"{tag}.py" in files:
-                if data.path and os.path.exists(data.path):
-                  os.remove(data.path)
-                  shutil.move(
-                    os.path.join(root, f"{tag}.py"), data.path
-                  )
-                  found["py"] = True
-              if found["png"] and found["py"]:
-                break
-        except Exception as e:
-          print(f"Update failed for {tag}: {e}")
-        finally:
-          if tag in self.downloadingVersions:
-            self.downloadingVersions.remove(tag)
-          self.activeDownloads.pop(tag, None)
-          self.activeDownloads.pop(f"meta_{tag}", None)
-          shutil.rmtree(dest_dir, ignore_errors=True)
-          self.updateVersionList()
-          if found["py"]:
-            self.showRestartPrompt(f"{tag} updated successfully.")
+  #   fetcher = self.ReleaseFetchThread(
+  #     api_url, pat=self.settings.githubPat or None, max_pages=1
+  #   )
+  #   if not widget:
+  #     widget = self.activeItemRefs.get(tag)
+  #   assert isinstance(widget, VersionItemWidget)
+  #   widget.setModeUnknownEnd()
 
-      dl_thread.progress.connect(on_progress)
-      dl_thread.finished.connect(on_finished)
-      dl_thread.finished.connect(dl_thread.deleteLater)
-      dl_thread.start()
+  #   def on_metadata(widget: VersionItemWidget, releases):
+  #     if not releases:
+  #       return
+  #     data.release = releases[0]
+  #     assert data.release is not None
+  #     widget.setModeKnownEnd()
 
-    fetcher.finished.connect(bind(on_metadata, widget))
-    fetcher.finished.connect(fetcher.deleteLater)
-    self.activeDownloads[f"meta_{tag}"] = fetcher
-    fetcher.start()
+  #     def on_progress(progress):
+  #       widget.setProgress(progress)
+
+  #     asset_name = ls.LAUNCHER_ASSET_NAME
+  #     asset = next(
+  #       (a for a in data.release.get("assets", []) if a["name"] == asset_name),
+  #       None,
+  #     )
+
+  #     if not asset or tag in self.downloadingVersions:
+  #       self.activeDownloads.pop(f"meta_{tag}", None)
+  #       return
+
+  #     self.downloadingVersions.append(tag)
+  #     dest_dir = os.path.join(
+  #       os.path.abspath(os.path.join(LAUNCHER_START_PATH, "-")), f"temp_{tag}"
+  #     )
+  #     out_file = os.path.join(dest_dir, asset["name"])
+  #     os.makedirs(dest_dir, exist_ok=True)
+
+  #     dl_thread = AssetDownloadThread(asset["browser_download_url"], out_file)
+  #     self.activeDownloads[tag] = dl_thread
+
+  #     def on_finished(path):
+  #       widget.setModeDisabled()
+  #       found = {"py": False, "png": False}
+  #       extracted = False
+  #       try:
+  #         if path.endswith(".zip"):
+  #           with zipfile.ZipFile(path, "r") as z:
+  #             z.extractall(dest_dir)
+  #           extracted = True
+  #         elif path.endswith(".7z"):
+  #           with py7zr.SevenZipFile(path, "r") as z:
+  #             z.extractall(dest_dir)
+  #           extracted = True
+
+  #         if extracted:
+  #           # Replacement logic
+  #           for root, _, files in os.walk(dest_dir):
+  #             if f"{tag}.png" in files:
+  #               if data.path and os.path.exists(data.path):
+  #                 imgpath = os.path.join(
+  #                   os.path.dirname(data.path),
+  #                   "images",
+  #                   f"{tag}.png",
+  #                 )
+  #                 os.remove(imgpath)
+  #                 shutil.move(
+  #                   os.path.join(root, f"{tag}.png"),
+  #                   imgpath,
+  #                 )
+  #                 found["png"] = True
+  #             if f"{tag}.py" in files:
+  #               if data.path and os.path.exists(data.path):
+  #                 os.remove(data.path)
+  #                 shutil.move(
+  #                   os.path.join(root, f"{tag}.py"), data.path
+  #                 )
+  #                 found["py"] = True
+  #             if found["png"] and found["py"]:
+  #               break
+  #       except Exception as e:
+  #         print(f"Update failed for {tag}: {e}")
+  #       finally:
+  #         if tag in self.downloadingVersions:
+  #           self.downloadingVersions.remove(tag)
+  #         self.activeDownloads.pop(tag, None)
+  #         self.activeDownloads.pop(f"meta_{tag}", None)
+  #         shutil.rmtree(dest_dir, ignore_errors=True)
+  #         self.updateVersionList()
+  #         if found["py"]:
+  #           self.showRestartPrompt(f"{tag} updated successfully.")
+
+  #     dl_thread.progress.connect(on_progress)
+  #     dl_thread.finished.connect(on_finished)
+  #     dl_thread.finished.connect(dl_thread.deleteLater)
+  #     dl_thread.start()
+
+  #   fetcher.finished.connect(bind(on_metadata, widget))
+  #   fetcher.finished.connect(fetcher.deleteLater)
+  #   self.activeDownloads[f"meta_{tag}"] = fetcher
+  #   fetcher.start()
 
   def showRestartPrompt(self, text):
     def restart():
