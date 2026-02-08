@@ -52,6 +52,8 @@ import math
 
 import hashlib
 
+os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
+
 
 @dataclass
 class ArgumentData:
@@ -170,13 +172,28 @@ selectorConfig = None
 
 LAUNCHER_START_PATH = os.path.abspath(os.path.dirname(__file__))
 # asdadsas
-OFFLINE, LAUNCHER_TO_LAUNCH, TRY_UPDATE, HEADLESS, VERSION = checkArgs(
-  ArgumentData(key="offline", afterCount=0),
-  ArgumentData(key=["launcherName", "startLauncher"], afterCount=1),
-  ArgumentData(key="tryupdate", afterCount=0),
-  ArgumentData(key=["silent", "headless"], afterCount=0),
-  ArgumentData(key="version", afterCount=1),
+OFFLINE, LAUNCHER_TO_LAUNCH, TRY_UPDATE, HEADLESS, VERSION, REGISTER_PROTOCOLS = (
+  checkArgs(
+    ArgumentData(key="offline", afterCount=0),
+    ArgumentData(key=["launcherName", "startLauncher"], afterCount=1),
+    ArgumentData(key="tryupdate", afterCount=0),
+    ArgumentData(key=["silent", "headless"], afterCount=0),
+    ArgumentData(key="version", afterCount=1),
+    ArgumentData(key="registerProtocols", afterCount=1),
+  )
 )
+
+
+from PROTO import PROTO
+
+
+def protoCalled(msg):
+  pass
+
+
+if PROTO.isSelf("multi-game-launcher") or REGISTER_PROTOCOLS:
+  PROTO.add("multi-game-launcher", protoCalled)
+
 # print(HEADLESS)
 LOCAL_COLOR = Qt.GlobalColor.green
 ERROR_COLOR = Qt.GlobalColor.darkRed
