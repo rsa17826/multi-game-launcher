@@ -34,8 +34,8 @@ to remove a game version or launcher right click on the launcher or game version
 ![rclick menu](./_/_ghImages/rclickmenu1.png)
 ![rclick menu](./_/_ghImages/rclickmenu2.png)
 
+if protocol handle is registered links like `multi-game-launcher:downloadLauncher/vex++/rsa17826/vex-plus-plus/launcher.zip` pass the data as args separated by `/` - gh doesn't render this as a link correctly but this is a valid link format
+
 ---
 
 for if making a launcher for this there is a .url file that can be used located at [./\_/base launcher files.url](./_/base%20launcher%20files.url) that points to this repo
-
-if protocol handle is registered links like `multi-game-launcher:downloadLauncher/vex++/rsa17826/vex-plus-plus/launcher.zip` - gh doesn't render this as a link correctly
