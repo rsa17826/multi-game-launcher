@@ -174,7 +174,7 @@ selectorConfig = None
 
 LAUNCHER_START_PATH = os.path.abspath(os.path.dirname(__file__))
 # asdadsas
-OFFLINE, LAUNCHER_TO_LAUNCH, TRY_UPDATE, HEADLESS, VERSION, REGISTER_PROTOCOLS = (
+OFFLINE, LAUNCHER_TO_LAUNCH, TRY_UPDATE, HEADLESS, VERSION, REGISTER_PROTOCOLS, DOWNLOAD_LAUNCHER = (
   checkArgs(
     ArgumentData(key="offline", afterCount=0),
     ArgumentData(key=["launcherName", "startLauncher"], afterCount=1),
@@ -182,6 +182,7 @@ OFFLINE, LAUNCHER_TO_LAUNCH, TRY_UPDATE, HEADLESS, VERSION, REGISTER_PROTOCOLS =
     ArgumentData(key=["silent", "headless"], afterCount=0),
     ArgumentData(key="version", afterCount=1),
     ArgumentData(key="registerProtocols", afterCount=0),
+    ArgumentData(key="downloadLauncher", afterCount=3),
   )
 )
 
@@ -192,19 +193,20 @@ from PROTO import PROTO
 def protoCalled(msg: str): # type: ignore
   msg: list[str] = msg.split("/")
   global OFFLINE, LAUNCHER_TO_LAUNCH, TRY_UPDATE, HEADLESS, VERSION
-  OFFLINE, LAUNCHER_TO_LAUNCH, TRY_UPDATE, HEADLESS, VERSION = checkArgs(
+  OFFLINE, LAUNCHER_TO_LAUNCH, TRY_UPDATE, HEADLESS, VERSION, DOWNLOAD_LAUNCHER = checkArgs(
     ArgumentData(key="offline", afterCount=0),
     ArgumentData(key=["launcherName", "startLauncher"], afterCount=1),
     ArgumentData(key="tryupdate", afterCount=0),
     ArgumentData(key=["silent", "headless"], afterCount=0),
     ArgumentData(key="version", afterCount=1),
+    ArgumentData(key="downloadLauncher", afterCount=3),
     useArgs=msg,
   )
-  match msg[0]:
-    case "downloadLauncher":
-      print(msg)
-    case _:
-      print("failed to find valid match", msg)
+  # match msg[0]:
+  #   case "downloadLauncher":
+  #     print(msg)
+  #   case _:
+  #     print("failed to find valid match", msg)
 
 
 if PROTO.isSelf("multi-game-launcher") or REGISTER_PROTOCOLS:
@@ -1442,6 +1444,8 @@ class Launcher(QWidget):
         if not launcherUpdateAlreadyChecked:
           self.updateLauncher()
         launcherUpdateAlreadyChecked = True
+    if DOWNLOAD_LAUNCHER:
+      print(DOWNLOAD_LAUNCHER, "DOWNLOAD_LAUNCHER")
     if not OFFLINE and self.settings.fetchOnLoad:
       self.startFetch(max_pages=self.settings.maxPagesOnLoad)
       self.releaseFetchingThread.error.connect(
