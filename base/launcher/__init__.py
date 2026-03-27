@@ -474,11 +474,41 @@ Args:
   errorText: str = ""
 
 
+from typing import overload
+
+
 class f:
+  @staticmethod
+  @overload
+  def read(
+    file: int | str | bytes | os.PathLike[str] | os.PathLike[bytes],
+    default: bytes,
+    asbinary: Literal[True],
+    buffering: int = ...,
+    encoding: str | None = ...,
+    errors: str | None = ...,
+    newline: str | None = ...,
+    closefd: bool = ...,
+    opener: Callable[[str, int], int] | None = ...,
+  ) -> bytes: ...
+
+  @staticmethod
+  @overload
+  def read(
+    file: int | str | bytes | os.PathLike[str] | os.PathLike[bytes],
+    default: str = ...,
+    asbinary: Literal[False] = ...,
+    buffering: int = ...,
+    encoding: str | None = ...,
+    errors: str | None = ...,
+    newline: str | None = ...,
+    closefd: bool = ...,
+    opener: Callable[[str, int], int] | None = ...,
+  ) -> str: ...
   @staticmethod
   def read(
     file: int | str | bytes | os.PathLike[str] | os.PathLike[bytes],
-    default: str = "",
+    default: str | bytes = "",
     asbinary: bool = False,
     buffering: int = -1,
     encoding: str | None = None,
@@ -486,34 +516,31 @@ class f:
     newline: str | None = None,
     closefd: bool = True,
     opener: Callable[[str, int], int] | None = None,
-  ):
+  ) -> str | bytes:
     if os.path.exists(file):
       with open(
         file,
-        "r" + ("b" if asbinary else ""),
+        mode="r" + ("b" if asbinary else ""),
         buffering=buffering,
-        encoding=encoding,
         errors=errors,
         newline=newline,
         closefd=closefd,
         opener=opener,
-      ) as f:
-        text: str | bytes | None = f.read() # pyright: ignore[reportAny]
-      if text:
-        return text
-      return default
+      ) as fb:
+        data = fb.read() # pyright: ignore[reportAny]
+      return data if data else default
     else:
       with open(
         file,
-        "w" + ("b" if asbinary else ""),
+        mode="w" + ("b" if asbinary else ""),
         buffering=buffering,
         encoding=encoding,
         errors=errors,
         newline=newline,
         closefd=closefd,
         opener=opener,
-      ) as f:
-        _ = f.write(default)
+      ) as fw:
+        _ = fw.write(default)
       return default
 
   @staticmethod
@@ -847,6 +874,8 @@ class SettingsData:
 
 
 from PySide6.QtCore import QPoint
+
+
 class Launcher(QWidget):
   def updateLauncher(self) -> None:
     import subprocess
@@ -1128,7 +1157,7 @@ class Launcher(QWidget):
       QApplication.quit()
 
   def getGameDataLocation(self, version: str | None = None) -> str:
-    usesCentralGameDataLocation: bool = (
+    usesCentralGameDataLocation: bool = bool(
       self.config.CAN_USE_CENTRAL_GAME_DATA_FOLDER
       and self.settings.useCentralGameDataFolder
     )
@@ -1151,7 +1180,7 @@ class Launcher(QWidget):
       self.downloadingVersions.append(tag)
       release: ReleaseType | None = data.release
       assert release is not None
-      asset: Any | None = next(
+      asset: dict[str, object] | None = next(
         (
           a
           for a in release.get("assets", [])
@@ -1169,7 +1198,7 @@ class Launcher(QWidget):
       dest_dir: str = os.path.join(self.VERSIONS_DIR, tag)
       out_file: str = os.path.join(dest_dir, asset["name"])
 
-      widget: Any = self.activeItemRefs[data.version]
+      widget: VersionItemWidget = self.activeItemRefs[data.version]
       assert isinstance(widget, VersionItemWidget)
       widget.setModeUnknownEnd()
 
@@ -1189,7 +1218,7 @@ class Launcher(QWidget):
       len(self.activeDownloads) < self.settings.maxConcurrentDls
       or self.settings.maxConcurrentDls == 0
     ):
-      next_dl = self.downloadQueue.pop(0)
+      next_dl: tuple[str, str, str, str] = self.downloadQueue.pop(0)
       self.startActualDownload(*next_dl)
     print(self.downloadingVersions)
     self.populateList()
@@ -1234,11 +1263,11 @@ class Launcher(QWidget):
 
       if extracted:
         print(f"Finished Processing {tag}")
-        self.activeDownloads.pop(tag, None)
+        _ = self.activeDownloads.pop(tag, None)
         assert isinstance(current_widget, VersionItemWidget)
         self.processDownloadQueue()
       else:
-        self.activeDownloads.pop(tag, None)
+        _ = self.activeDownloads.pop(tag, None)
       self.config.onGameVersionDownloadComplete(path, tag)
       if VERSION and VERSION == tag:
         self.startGameVersion(
@@ -1250,15 +1279,17 @@ class Launcher(QWidget):
     _ = dl_thread.progress.connect(bind[None](self.handleDownloadProgress, tag))
     _ = dl_thread.onfinished.connect(onFinished)
     _ = dl_thread.error.connect(
-      lambda e: print(f"DL Error {tag}: {e}")
-    ) # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
+      lambda e: print(
+        f"DL Error {tag}: {e}"
+      ) # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
+    )
 
     _ = dl_thread.onfinished.connect(dl_thread.deleteLater)
 
     dl_thread.start()
 
   def handleDownloadProgress(self, version_tag: str, percentage: int) -> None:
-    widget: str | None = self.activeItemRefs.get(version_tag)
+    widget: VersionItemWidget | None = self.activeItemRefs.get(version_tag)
     assert isinstance(widget, VersionItemWidget)
     widget.setProgress(percentage)
     widget.label.setText(f"Downloading {version_tag}... ({percentage}%)")
@@ -1279,7 +1310,7 @@ class Launcher(QWidget):
       except Exception as e:
         print("failed to save cached data", e)
     all_items_data: list[listData] = []
-    local_versions: set[Any] = set[Any]()
+    local_versions: set[str] = set[str]()
     if self.config.configs:
       for rel in self.foundReleases:
         version = rel.get("tag_name")
@@ -1293,7 +1324,7 @@ class Launcher(QWidget):
             )
           )
     else:
-      version_map: dict[Any, Any] = {}
+      version_map: dict[str, listData] = {}
       if os.path.isdir(self.VERSIONS_DIR):
         for dirname in os.listdir(self.VERSIONS_DIR):
           full_path = os.path.join(self.VERSIONS_DIR, dirname)
@@ -1438,11 +1469,11 @@ class Launcher(QWidget):
         version=dirname, status=Statuses.localOnly, path=full_path
       )
 
-  def sortVersions(self, versions_data) -> Any:
-    versionThatWasLastRan: None = None
+  def sortVersions(self, versions_data: list[listData]) -> Any:
+    versionThatWasLastRan: str | None = None
     if self.GAME_ID != "-":
       try:
-        versionThatWasLastRan: None = f.read(
+        versionThatWasLastRan = f.read(
           os.path.join(
             APP_DATA_PATH,
             self.GAME_ID,
@@ -1741,7 +1772,7 @@ class Launcher(QWidget):
       print("Changes discarded. Reverting UI...")
       self.loadUserSettings()
 
-  def showContextMenu(self, pos:QPoint) -> None:
+  def showContextMenu(self, pos: QPoint) -> None:
     item: Any = self.listWidget.itemAt(pos)
     if not item:
       return
@@ -1787,7 +1818,7 @@ class Launcher(QWidget):
     self.config.addContextMenuOptions(self, data, menu, newAction)
     _ = menu.exec(self.listWidget.mapToGlobal(pos))
 
-  def startFetch(self, max_pages:int=1, noDefaultConnections:bool=False):
+  def startFetch(self, max_pages: int = 1, noDefaultConnections: bool = False):
     """Standard fetch with a page limit."""
     if self.releaseFetchingThread and self.releaseFetchingThread.isRunning():
       return
