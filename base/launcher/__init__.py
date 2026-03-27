@@ -202,6 +202,31 @@ def get_app_data_path():
 APP_DATA_PATH = get_app_data_path()
 os.makedirs(APP_DATA_PATH, exist_ok=True)
 
+# import os
+# import sys
+
+# def get_paths(app_name: str):
+#     if sys.platform == "win32":
+#         # Windows: Config goes to 'Roaming', Data goes to 'Local'
+#         config_base = os.environ.get("APPDATA", os.path.expanduser("~/AppData/Roaming"))
+#         data_base = os.environ.get("LOCALAPPDATA", os.path.expanduser("~/AppData/Local"))
+#     elif sys.platform == "darwin":
+#         # macOS: Both usually live in Application Support
+#         config_base = data_base = os.path.expanduser("~/Library/Application Support")
+#     else:
+#         # Linux/Unix: Standard XDG paths
+#         config_base = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
+#         data_base = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
+
+#     return {
+#         "config": os.path.join(config_base, app_name),
+#         "data": os.path.join(data_base, app_name)
+#     }
+
+# paths = get_paths("launcher")
+# APP_CONFIG_PATH = paths["config"]
+# APP_DATA_PATH = paths["data"]
+
 ALL_ARG_DATA = (
   ArgumentData(key="offline", afterCount=0),
   ArgumentData(key=["launcherName", "startLauncher"], afterCount=1),
