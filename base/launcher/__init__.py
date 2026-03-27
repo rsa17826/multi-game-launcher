@@ -2310,7 +2310,7 @@ def findAllLaunchables():
   sys.path.append(os.path.abspath(APP_DATA_PATH))
   print("Current Working Directory:", os.getcwd())
 
-  for filename in os.listdir():
+  for filename in os.listdir(APP_DATA_PATH):
     if filename.endswith(".py") and filename != "__init__.py":
       module_name = filename[:-3]
       try:
