@@ -2,10 +2,19 @@
 # @regex (?<=[^\s])  #
 # @replace  #
 # @endregex
+from _hashlib import HASH
+from ast import TypeAlias
+from inspect import FrameInfo
+from os import stat_result
+from re import Match
+from types import ModuleType
+from requests.models import Response
+from subprocess import CompletedProcess
+from typing import Any, Never, Literal, cast
 import shutil
 import inspect
 from dataclasses import dataclass
-from typing import Callable, Any, Optional
+from typing import Callable
 from functools import partial as bind
 from itertools import islice
 import sys
@@ -15,19 +24,26 @@ import requests
 import shlex
 from enum import Enum, EnumMeta
 import json
-from PySide6.QtGui import QDesktopServices, QPixmap, QIcon
-from PySide6.QtCore import QUrl
+from PySide6.QtGui import (
+  QAction,
+  QCloseEvent,
+  QDesktopServices,
+  QPainter,
+  QPixmap,
+  QIcon,
+)
+from PySide6.QtCore import QCoreApplication, QEvent, QRect, QRectF, QUrl, Signal
 from PySide6.QtWidgets import (
   QApplication,
   QWidget,
-  listWidget,
+  QListWidget,
   QPushButton,
   QVBoxLayout,
   QHBoxLayout,
   QCheckBox,
   QLineEdit,
   QLabel,
-  listWidgetItem,
+  QListWidgetItem,
   QSpinBox,
   QDialog,
   QGroupBox,
@@ -35,9 +51,8 @@ from PySide6.QtWidgets import (
   QMenu,
   QMessageBox,
 )
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QThread
 from PySide6.QtGui import (
-  QPainter,
   QLinearGradient,
   QColor,
 )
@@ -47,12 +62,21 @@ import zipfile
 import py7zr
 import re
 from pathlib import Path
-from PySide6.QtCore import Qt, QRectF
+from PySide6.QtCore import Qt
 import math
 
 import hashlib
 
+from typing_extensions import override # pyright: ignore[reportMissingModuleSource]
+from collections.abc import Iterator
+
+type ReleaseType = dict[str, object]
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
+
+
+class EnumComboBox(QComboBox):
+  usesEnum: bool = False
+  usedEnum: type[Enum] | None = None
 
 
 @dataclass
@@ -258,7 +282,7 @@ def buildArgs(*argData: ArgumentData, useArgs: list[str]) -> list[str]:
           break
       else:
         # elif isinstance(data.key, list):
-        # If the key is a list, check if any key matches the current_arg
+        # If the key is a list, check if object key matches the current_arg
         if current_arg in data.key:
           matching_data = data
           break
@@ -341,8 +365,12 @@ LOCAL_ONLY_COLOR = Qt.GlobalColor.yellow
 ONLINE_COLOR = Qt.GlobalColor.cyan
 MISSING_COLOR = Qt.GlobalColor.gray
 
-MAIN_LOADING_COLOR = (0, 210, 255)
-UNKNOWN_TIME_LOADING_COLOR = (255, 108, 0)
+MAIN_LOADING_COLOR: tuple[int, int, int] = (0, 210, 255)
+UNKNOWN_TIME_LOADING_COLOR: tuple[Literal[255], Literal[108], Literal[0]] = (
+  255,
+  108,
+  0,
+)
 
 launcherUpdateAlreadyChecked = False
 
@@ -359,13 +387,10 @@ class Statuses(Enum):
 # waitingForDownload = 3
 
 
-from typing import Type
-
-
 @dataclass
 class listData:
   path: str | None
-  release: dict[Any, Any] | None
+  release: ReleaseType | None
   status: Statuses
   version: str
 
@@ -440,10 +465,10 @@ Args:
   WINDOW_TITLE: str = "No Window Title Has Been Set"
   """what to set the launchers title to"""
   SHOULD_USE_HARD_LINKS: bool = False
-  """will set default state of setting replaceDuplicateGameFilesWithHardlinks which if true will scan all new version downloads and check to see if any files are the same between different versions and replace the new files with hardlinks instead"""
+  """will set default state of setting replaceDuplicateGameFilesWithHardlinks which if true will scan all new version downloads and check to see if object files are the same between different versions and replace the new files with hardlinks instead"""
   CAN_USE_CENTRAL_GAME_DATA_FOLDER: bool = False
   """if true will make all game versions appear to be launched from a single dir else will just launch each one from a separate location"""
-  configs: dict[object, object] | None = None
+  configs: dict[str, Config] | None = None # pyright: ignore[reportUndefinedVariable]
   """if true will make all game versions appear to be launched from a single dir else will just launch each one from a separate location"""
   hadErrorLoading: bool = False
   errorText: str = ""
@@ -494,7 +519,7 @@ class f:
   @staticmethod
   def write(
     file: int | str | bytes | os.PathLike[str] | os.PathLike[bytes],
-    text:str|bytes,
+    text: str | bytes,
     asbinary: bool = False,
     buffering: int = -1,
     encoding: str | None = None,
@@ -513,21 +538,22 @@ class f:
       closefd=closefd,
       opener=opener,
     ) as f:
-      _=f.write(text)
+      _ = f.write(text)
     return text
 
 
 class AssetDownloadThread(QThread):
-  progress = Signal(int)
-  finished = Signal(str)
-  error = Signal(str)
+  progress: Signal = Signal(int)
+  onfinished: Signal = Signal(str)
+  error: Signal = Signal(str)
 
-  def __init__(self, url, dest):
+  def __init__(self, url: str, dest: str) -> None:
     super().__init__()
-    self.url = url
-    self.dest = dest
+    self.url: str = url
+    self.dest: str = dest
 
-  def run(self):
+  @override
+  def run(self) -> None:
     try:
       with requests.get(self.url, stream=True) as r:
         r.raise_for_status()
@@ -535,46 +561,53 @@ class AssetDownloadThread(QThread):
         downloaded = 0
 
         with open(self.dest, "wb") as f:
-          for chunk in r.iter_content(chunk_size=8192):
+          for chunk in cast(Iterator[bytes], r.iter_content(chunk_size=8192)):
             if chunk:
-              f.write(chunk)
+              _ = f.write(chunk)
               downloaded += len(chunk)
               if total:
                 percent = int(downloaded / total * 100)
                 self.progress.emit(percent)
 
-      self.finished.emit(self.dest)
+      self.onfinished.emit(self.dest)
     except Exception as e:
       self.error.emit(str(e))
 
 
-class Cache:
-  lastinp = None
+from typing import TypeVar, Generic
 
-  def __init__(self):
-    self.cache = {}
+T = TypeVar("T")
 
-  def has(self, item):
+
+class Cache(Generic[T]):
+  lastinp: object = None
+
+  def __init__(self) -> None:
+    self.cache: dict[object, T] = {}
+
+  def has(self, item: object) -> bool:
     self.lastinp = item
     return item in self.cache
 
-  def get(self):
+  def get(self) -> T:
     if not self.has(self.lastinp):
       raise KeyError(f"No such item {self.lastinp}")
     thing = self.cache[self.lastinp]
     del self.lastinp
     return thing
 
-  def set(self, value):
+  def set(self, value: T) -> T:
     self.cache[self.lastinp] = value
     del self.lastinp
     return value
 
-  def clear(self):
+  def clear(self) -> None:
     self.cache = {}
 
 
-iconCache = Cache()
+iconCache: Cache[QPixmap] = Cache[QPixmap]()
+from PySide6.QtGui import QPaintEvent
+from PySide6.QtCore import QPointF
 
 
 class VersionItemWidget(QWidget):
@@ -583,23 +616,49 @@ class VersionItemWidget(QWidget):
     both = 1
     rightToLeft = 2
 
-  def __init__(self, text="", color=MISSING_COLOR, image_source=None):
+  def __init__(
+    self,
+    text: str = "",
+    color: Qt.GlobalColor = MISSING_COLOR,
+    image_source: str | None = None,
+  ):
     super().__init__()
-    self.text = text
-    self.progress = 0
+    self.text: str = text
+    self.progress: float = 0
     self.setModeUnknownEnd()
-    self.startTime = 0
-    self.animSpeed = 10
+    self.startTime: float = 0
+    self.animSpeed: float = 10
     self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
     self.setStyleSheet("background: transparent; border: none;")
-    self.image_label = QLabel()
+    self.image_label: QLabel = QLabel()
     self.image_label.setFixedSize(50, 50) # Set a standard thumbnail size
-    self.label = QLabel(text)
-    color_hex = color.name
+    self.label: QLabel = QLabel(text)
+    color_hex: Literal[
+      "color0",
+      "color1",
+      "black",
+      "white",
+      "darkGray",
+      "gray",
+      "lightGray",
+      "red",
+      "green",
+      "blue",
+      "cyan",
+      "magenta",
+      "yellow",
+      "darkRed",
+      "darkGreen",
+      "darkBlue",
+      "darkCyan",
+      "darkMagenta",
+      "darkYellow",
+      "transparent",
+    ] = color.name
     self.label.setStyleSheet(f"background: transparent; color: {color_hex};")
 
-    self.qblayout = QHBoxLayout(self)
-    self.icon_label = QLabel()
+    self.qblayout: QHBoxLayout = QHBoxLayout(self)
+    self.icon_label: QLabel = QLabel()
     self.icon_label.setFixedSize(32, 32) # Standard thumbnail size
     self.icon_label.setScaledContents(True)
     self.icon_label.hide()
@@ -609,7 +668,7 @@ class VersionItemWidget(QWidget):
     self.qblayout.addStretch()
     self.setIcon(image_source)
 
-  def setIcon(self, image_source):
+  def setIcon(self, image_source: str | None) -> None:
     if not image_source:
       self.icon_label.clear()
       return
@@ -634,31 +693,33 @@ class VersionItemWidget(QWidget):
     else:
       self.icon_label.setText("N/A")
 
-  def setModeKnownEnd(self):
+  def setModeKnownEnd(self) -> None:
     flag = self.noKnownEndPoint
-    self.progressColor = MAIN_LOADING_COLOR
-    self.progressType = VersionItemWidget.ProgressTypes.leftToRight
-    self.noKnownEndPoint = False
+    self.progressColor: tuple[int, int, int] = MAIN_LOADING_COLOR
+    self.progressType: VersionItemWidget.ProgressTypes = (
+      VersionItemWidget.ProgressTypes.leftToRight
+    )
+    self.noKnownEndPoint: bool = False
     if flag:
       self.progress = 0
       self.update()
 
-  def setModeUnknownEnd(self):
+  def setModeUnknownEnd(self) -> None:
     self.progressColor = UNKNOWN_TIME_LOADING_COLOR
     self.progressType = VersionItemWidget.ProgressTypes.both
     self.noKnownEndPoint = True
     self.startTime = time.time()
     self.update()
 
-  def setModeDisabled(self):
+  def setModeDisabled(self) -> None:
     self.noKnownEndPoint = False
     self.progress = 101
     self.update()
 
-  def setLabelColor(self, color):
+  def setLabelColor(self, color: Qt.GlobalColor) -> None:
     self.label.setStyleSheet(f"background: transparent; color: {color.name};")
 
-  def setProgress(self, percent):
+  def setProgress(self, percent: float) -> None:
     if percent == self.progress:
       return
     if self.noKnownEndPoint:
@@ -667,26 +728,33 @@ class VersionItemWidget(QWidget):
     self.progress = percent
     self.update()
 
-  def paintEvent(self, event):
+  @override
+  def paintEvent(self, event: QPaintEvent) -> None:
     if not ((0 < self.progress <= 100) or self.noKnownEndPoint):
       super().paintEvent(event)
       return
 
-    painter = QPainter(self)
+    painter: QPainter = QPainter(self)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    rect = self.rect()
-    w = rect.width()
-    h = rect.height()
-    gradSize = int(w / 8)
+    rect: QRect = self.rect()
+    w: int = rect.width()
+    h: int = rect.height()
+    gradSize: int = int(w / 8)
     minGradAlpha = 50
     if self.noKnownEndPoint:
       self.progress = int(((time.time() - self.startTime) * self.animSpeed) % 100)
       QTimer.singleShot(16, self.update)
 
     if self.progressType == self.ProgressTypes.both:
-      fill_end = w * self.progress / 100
-      solid_rect = QRectF(0, 0, max(0, fill_end - gradSize), h)
-      tip_rect = QRectF(solid_rect.right(), 0, int(min(gradSize, fill_end)), h)
+      fill_end: float = (
+        w * self.progress / 100
+      ) # pyright: ignore[reportRedeclaration]
+      solid_rect: QRectF = QRectF(
+        0, 0, max(0, fill_end - gradSize), h
+      ) # pyright: ignore[reportRedeclaration]
+      tip_rect: QRectF = QRectF(
+        solid_rect.right(), 0, int(min(gradSize, fill_end)), h
+      ) # pyright: ignore[reportRedeclaration]
       self._drawProgress(painter, solid_rect, minGradAlpha)
       self._drawGradient(
         painter,
@@ -712,9 +780,9 @@ class VersionItemWidget(QWidget):
       )
 
     elif self.progressType == self.ProgressTypes.leftToRight:
-      fill_end = w * self.progress / 100
-      solid_rect = QRectF(0, 0, max(0, fill_end - gradSize), h)
-      tip_rect = QRectF(solid_rect.right(), 0, min(gradSize, fill_end), h)
+      fill_end: float = w * self.progress / 100
+      solid_rect: QRectF = QRectF(0, 0, max(0, fill_end - gradSize), h)
+      tip_rect: QRectF = QRectF(solid_rect.right(), 0, min(gradSize, fill_end), h)
       self._drawProgress(painter, solid_rect, minGradAlpha)
       self._drawGradient(
         painter,
@@ -741,12 +809,19 @@ class VersionItemWidget(QWidget):
 
     super().paintEvent(event)
 
-  def _drawProgress(self, painter, rect, alpha):
+  def _drawProgress(self, painter: QPainter, rect: QRectF, alpha: int):
     if rect.width() <= 0:
       return
     painter.fillRect(rect, QColor(*self.progressColor, alpha))
 
-  def _drawGradient(self, painter, rect, start_pt, end_pt, min_alpha):
+  def _drawGradient(
+    self,
+    painter: QPainter,
+    rect: QRectF,
+    start_pt: QPointF,
+    end_pt: QPointF,
+    min_alpha: int,
+  ):
     if rect.width() <= 0:
       return
     grad = QLinearGradient(start_pt, end_pt)
@@ -758,44 +833,48 @@ class VersionItemWidget(QWidget):
     painter.fillRect(rect, grad)
 
 
-from typing import Any
-
 os.makedirs(os.path.join(APP_DATA_PATH, "launcherData"), exist_ok=True)
 os.makedirs(os.path.join(APP_DATA_PATH, "images"), exist_ok=True)
+from PySide6.QtCore import QByteArray
 
 
 class SettingsData:
   """A container for dot-notation access to settings."""
 
-  def __getattr__(self, name) -> Any:
+  def __getattr__(self, name: str) -> object:
     print("WARNING: ", name, "was not set")
     return None
 
 
+from PySide6.QtCore import QPoint
 class Launcher(QWidget):
-  def updateLauncher(self):
+  def updateLauncher(self) -> None:
     import subprocess
     import os
     import sys
 
     # Set the repository URL and the local directory where the script is located
     repo_url = "https://github.com/rsa17826/multi-game-launcher.git"
-    local_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../..")
+    local_dir: str = os.path.join(
+      os.path.dirname(os.path.abspath(__file__)), "../.."
+    )
 
     # Check if the directory is a valid Git repository
-    def is_git_repo(path):
+    def is_git_repo(path: str) -> bool:
       return os.path.isdir(os.path.join(path, ".git"))
 
     # Initialize the Git repository if not already initialized
-    def init_git_repo(path, url):
+    def init_git_repo(path: str, url: str) -> None:
       try:
         print(f"Initializing new Git repository in {path}...")
         # Run git init to initialize the repo
-        subprocess.check_call(["git", "init"], cwd=path)
+        _ = subprocess.check_call(["git", "init"], cwd=path)
         # Add the remote repository URL
-        subprocess.check_call(["git", "remote", "add", "origin", url], cwd=path)
-        subprocess.check_call(["git", "add", "-A"], cwd=path)
-        subprocess.check_call(["git", "fetch", "origin"], cwd=local_dir)
+        _ = subprocess.check_call(
+          ["git", "remote", "add", "origin", url], cwd=path
+        )
+        _ = subprocess.check_call(["git", "add", "-A"], cwd=path)
+        _ = subprocess.check_call(["git", "fetch", "origin"], cwd=local_dir)
         print("Git repository initialized and remote set.")
       except subprocess.CalledProcessError as e:
         print("Error initializing repository:", e)
@@ -807,10 +886,10 @@ class Launcher(QWidget):
 
     try:
       print("Checking for updates...")
-      subprocess.check_call(
+      _ = subprocess.check_call(
         ["git", "reset", "--hard", "origin/main"], cwd=local_dir
       )
-      result = subprocess.run(
+      result: CompletedProcess[str] = subprocess.run(
         ["git", "pull", "--force", "origin", "main"],
         cwd=local_dir,
         capture_output=True,
@@ -826,16 +905,20 @@ class Launcher(QWidget):
       print("Error during update:", e)
 
   def addVersionItem(
-    self, version: str, status: Statuses, path=None, release=None, image_path=None
-  ):
-    item = listWidgetItem()
+    self,
+    version: str,
+    status: Statuses,
+    path: str | None = None,
+    release: ReleaseType | None = None, # , image_path:str|None=None
+  ) -> None:
+    item: QListWidgetItem = QListWidgetItem()
 
-    widget = VersionItemWidget("", MISSING_COLOR)
+    widget: VersionItemWidget = VersionItemWidget("", MISSING_COLOR)
     widget.setModeKnownEnd()
 
     item.setSizeHint(widget.sizeHint())
-    self.list.addItem(item)
-    self.list.setItemWidget(item, widget)
+    self.listWidget.addItem(item)
+    self.listWidget.setItemWidget(item, widget)
 
     item.setData(
       Qt.ItemDataRole.UserRole,
@@ -847,18 +930,18 @@ class Launcher(QWidget):
       ),
     )
 
-  def saveUserSettings(self):
-    local_data = {}
-    global_data = {}
+  def saveUserSettings(self) -> None:
+    local_data: dict[str, object] = {}
+    global_data: dict[str, object] = {}
 
-    for key, widget in self.widgetsToSave.items():
+    for key, widget in cast(dict[str, QWidget], self.widgetsToSave).items():
       if isinstance(widget, QLineEdit):
         value = widget.text()
       elif isinstance(widget, QCheckBox):
         value = widget.isChecked()
       elif isinstance(widget, QSpinBox):
         value = widget.value()
-      elif isinstance(widget, QComboBox):
+      elif isinstance(widget, EnumComboBox):
         value = widget.currentData()
         if widget.usesEnum: # type: ignore
           value = value.value
@@ -879,12 +962,12 @@ class Launcher(QWidget):
     except Exception as e:
       print(f"Failed to save settings: {e}")
 
-  def loadUserSettings(self):
-    local_data = {}
-    global_data = {}
+  def loadUserSettings(self) -> None:
+    local_data: dict[str, object] = {}
+    global_data: dict[str, object] = {}
 
     try:
-      defaultLocalSettingsFile = os.path.join(
+      defaultLocalSettingsFile: str = os.path.join(
         APP_DATA_PATH,
         "-",
         "launcherData/launcherSettings.json",
@@ -892,21 +975,21 @@ class Launcher(QWidget):
       os.makedirs(os.path.join(APP_DATA_PATH, "-", "launcherData"), exist_ok=True)
       if os.path.exists(defaultLocalSettingsFile):
         with open(defaultLocalSettingsFile, "r", encoding="utf-8") as f:
-          local_data = json.load(f)
+          local_data = cast(dict[str, object], json.load(f))
       if os.path.exists(self.LOCAL_SETTINGS_FILE):
         with open(self.LOCAL_SETTINGS_FILE, "r", encoding="utf-8") as f:
-          for k, v in json.load(f).items():
+          for k, v in cast(dict[str, object], json.load(f)).items():
             local_data[k] = v
       if os.path.exists(self.GLOBAL_SETTINGS_FILE):
         with open(self.GLOBAL_SETTINGS_FILE, "r", encoding="utf-8") as f:
-          global_data = json.load(f)
+          global_data = cast(dict[str, object], json.load(f))
     except Exception as e:
       print(f"Failed to load settings: {e}")
 
-    combined = {**global_data, **local_data}
+    combined: dict[str, object] = {**global_data, **local_data}
 
     for key, value in combined.items():
-      widget = self.widgetsToSave.get(key)
+      widget: QWidget | None = self.widgetsToSave.get(key)
       try:
         if widget:
           if isinstance(widget, QLineEdit):
@@ -919,7 +1002,7 @@ class Launcher(QWidget):
             # don't error when node has only one index - might be useful
             try:
               # try to make sure that the change event is sent as setCurrentIndex donesnt send it if current index is same
-              idx = widget.currentIndex()
+              idx: int = widget.currentIndex()
               if idx == value:
                 widget.setCurrentIndex(1 if idx == 0 else 0)
             except:
@@ -928,15 +1011,16 @@ class Launcher(QWidget):
       except Exception as e:
         print("error loading value for ", key, e)
 
-  def closeEvent(self, event):
+  @override
+  def closeEvent(self, event: QCloseEvent) -> None:
     self.saveUserSettings()
     super().closeEvent(event)
 
-  downloadingVersions = []
+  downloadingVersions: list[str] = []
 
-  def getFileHash(self, path):
+  def getFileHash(self, path: str) -> str | None:
     """Calculate SHA256 hash of a file in chunks to save memory."""
-    hasher = hashlib.sha256()
+    hasher: HASH = hashlib.sha256()
     try:
       with open(path, "rb") as f:
         while chunk := f.read(8192):
@@ -945,24 +1029,24 @@ class Launcher(QWidget):
     except Exception:
       return None
 
-  def deduplicateWithHardlinks(self, new_version_dir):
+  def deduplicateWithHardlinks(self, new_version_dir: str) -> None:
     if not (
       self.config.SHOULD_USE_HARD_LINKS
       and self.settings.replaceDuplicateGameFilesWithHardlinks
     ):
       return
 
-    file_map = {}
+    file_map: dict[tuple[int, str], list[str]] = {}
 
-    for root, dirs, files in os.walk(self.VERSIONS_DIR):
+    for root, _dirs, files in os.walk(self.VERSIONS_DIR):
 
       if os.path.abspath(root).startswith(os.path.abspath(new_version_dir)):
         continue
 
       for filename in files:
-        full_path = os.path.join(root, filename)
+        full_path: str = os.path.join(root, filename)
         try:
-          stat = os.stat(full_path)
+          stat: stat_result = os.stat(full_path)
 
           if stat.st_nlink > 1 and (stat.st_size, filename) in file_map:
             continue
@@ -972,14 +1056,16 @@ class Launcher(QWidget):
         except OSError:
           continue
 
-    for root, dirs, files in os.walk(new_version_dir):
+    for root, _dirs, files in os.walk(new_version_dir):
       for filename in files:
-        new_file_path = os.path.join(root, filename)
+        new_file_path: str = os.path.join(root, filename)
         try:
-          new_stat = os.stat(new_file_path)
+          new_stat: stat_result = os.stat(new_file_path)
           if new_stat.st_nlink > 1:
             continue
-          candidates = file_map.get((new_stat.st_size, filename))
+          candidates: list[str] | None = file_map.get(
+            (new_stat.st_size, filename)
+          )
           if candidates is not None:
             for candidate in candidates:
               if os.path.abspath(new_file_path) == os.path.abspath(
@@ -995,31 +1081,35 @@ class Launcher(QWidget):
         except Exception as e:
           print(f"Error processing {filename}: {e}")
 
-  def onVersionDoubleClicked(self, item):
-    data: listData = item.data(Qt.ItemDataRole.UserRole)
+  def onVersionDoubleClicked(self, item: QListWidgetItem) -> None:
+    data: listData | None = cast(
+      listData | None, item.data(Qt.ItemDataRole.UserRole)
+    )
     if not data:
       return
     match data.status:
       case Statuses.gameSelector:
         assert data.release is not None
-        run(data.release["config"], data.version)
-        self.close()
+        run(cast(Config, data.release["config"]), data.version)
+        _ = self.close()
         return
       case Statuses.local | Statuses.localOnly:
-        path = data.path
+        path: str | None = data.path
         if path:
           self.startGameVersion(data)
         return
       case Statuses.online:
         self.startQueuedDownloadRequest(data)
+      case Statuses.loadingInfo:
+        pass
 
-  def startGameVersion(self, data: listData):
+  def startGameVersion(self, data: listData) -> None:
     args: list[str] = (
       sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     )
 
     gdl = self.getGameDataLocation(data.version)
-    f.write(
+    _ = f.write(
       os.path.join(
         (APP_DATA_PATH),
         self.GAME_ID,
@@ -1029,7 +1119,7 @@ class Launcher(QWidget):
     )
     self.config.gameLaunchRequested(
       data.path,
-      shlex.split(self.settings.extraGameArgs) + args,
+      shlex.split(cast(str, self.settings.extraGameArgs)) + args,
       self.settings,
       self.settings.selectedOs,
       gdl,
@@ -1037,31 +1127,31 @@ class Launcher(QWidget):
     if self.settings.closeOnLaunch:
       QApplication.quit()
 
-  def getGameDataLocation(self, version=None):
-    usesCentralGameDataLocation = (
+  def getGameDataLocation(self, version: str | None = None) -> str:
+    usesCentralGameDataLocation: bool = (
       self.config.CAN_USE_CENTRAL_GAME_DATA_FOLDER
       and self.settings.useCentralGameDataFolder
     )
-    gdl: str = os.path.join(
+    gdl: str = os.path.join( # pyright: ignore[reportRedeclaration]
       (APP_DATA_PATH),
       self.GAME_ID,
       "gameData",
     )
     if not usesCentralGameDataLocation and version:
-      gdl = os.path.join(gdl, str(version))
+      gdl: str = os.path.join(gdl, str(version))
     os.makedirs(gdl, exist_ok=True)
     return gdl
 
-  def startQueuedDownloadRequest(self, *versions: listData):
+  def startQueuedDownloadRequest(self, *versions: listData) -> None:
     for data in versions:
-      tag = data.version
+      tag: str = data.version
       if tag in self.downloadingVersions:
         return
 
       self.downloadingVersions.append(tag)
-      release = data.release
+      release: ReleaseType | None = data.release
       assert release is not None
-      asset = next(
+      asset: Any | None = next(
         (
           a
           for a in release.get("assets", [])
@@ -1076,10 +1166,10 @@ class Launcher(QWidget):
         self.downloadingVersions.remove(tag)
         return
 
-      dest_dir = os.path.join(self.VERSIONS_DIR, tag)
-      out_file = os.path.join(dest_dir, asset["name"])
+      dest_dir: str = os.path.join(self.VERSIONS_DIR, tag)
+      out_file: str = os.path.join(dest_dir, asset["name"])
 
-      widget = self.activeItemRefs[data.version]
+      widget: Any = self.activeItemRefs[data.version]
       assert isinstance(widget, VersionItemWidget)
       widget.setModeUnknownEnd()
 
@@ -1093,7 +1183,7 @@ class Launcher(QWidget):
       )
     self.processDownloadQueue()
 
-  def processDownloadQueue(self):
+  def processDownloadQueue(self) -> None:
     assert isinstance(self.settings.maxConcurrentDls, int)
     while self.downloadQueue and (
       len(self.activeDownloads) < self.settings.maxConcurrentDls
@@ -1102,19 +1192,21 @@ class Launcher(QWidget):
       next_dl = self.downloadQueue.pop(0)
       self.startActualDownload(*next_dl)
     print(self.downloadingVersions)
-    self.list()
+    self.populateList()
 
-  def startActualDownload(self, tag, url, out_file, dest_dir):
+  def startActualDownload(
+    self, tag: str, url: str, out_file: str, dest_dir: str
+  ) -> None:
     print(url, tag)
     os.makedirs(dest_dir, exist_ok=True)
 
-    dl_thread = AssetDownloadThread(url, out_file)
+    dl_thread: AssetDownloadThread = AssetDownloadThread(url, out_file)
 
     self.activeDownloads[tag] = dl_thread
 
-    def onFinished(path):
+    def onFinished(path: str) -> None:
       self.processDownloadQueue()
-      current_widget = self.activeItemRefs.get(tag)
+      current_widget: QWidget | None = self.activeItemRefs.get(tag)
       assert isinstance(current_widget, VersionItemWidget)
       current_widget.label.setText(f"Extracting {tag}...")
       current_widget.setModeUnknownEnd()
@@ -1155,26 +1247,28 @@ class Launcher(QWidget):
           )
         )
 
-    dl_thread.progress.connect(bind(self.handleDownloadProgress, tag))
-    dl_thread.finished.connect(onFinished)
-    dl_thread.error.connect(lambda e: print(f"DL Error {tag}: {e}"))
+    _ = dl_thread.progress.connect(bind[None](self.handleDownloadProgress, tag))
+    _ = dl_thread.onfinished.connect(onFinished)
+    _ = dl_thread.error.connect(
+      lambda e: print(f"DL Error {tag}: {e}")
+    ) # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
 
-    dl_thread.finished.connect(dl_thread.deleteLater)
+    _ = dl_thread.onfinished.connect(dl_thread.deleteLater)
 
     dl_thread.start()
 
-  def handleDownloadProgress(self, version_tag, percentage):
-    widget = self.activeItemRefs.get(version_tag)
+  def handleDownloadProgress(self, version_tag: str, percentage: int) -> None:
+    widget: str | None = self.activeItemRefs.get(version_tag)
     assert isinstance(widget, VersionItemWidget)
     widget.setProgress(percentage)
     widget.label.setText(f"Downloading {version_tag}... ({percentage}%)")
 
-  def list(self):
-    if not self.list:
+  def populateList(self) -> None:
+    if not self.listWidget:
       return
     if self.GAME_ID != "-":
       try:
-        f.write(
+        _ = f.write(
           os.path.join(
             (APP_DATA_PATH),
             self.GAME_ID,
@@ -1184,8 +1278,8 @@ class Launcher(QWidget):
         )
       except Exception as e:
         print("failed to save cached data", e)
-    all_items_data = []
-    local_versions = set()
+    all_items_data: list[listData] = []
+    local_versions: set[Any] = set[Any]()
     if self.config.configs:
       for rel in self.foundReleases:
         version = rel.get("tag_name")
@@ -1199,14 +1293,14 @@ class Launcher(QWidget):
             )
           )
     else:
-      version_map = {}
+      version_map: dict[Any, Any] = {}
       if os.path.isdir(self.VERSIONS_DIR):
         for dirname in os.listdir(self.VERSIONS_DIR):
           full_path = os.path.join(self.VERSIONS_DIR, dirname)
           if os.path.isdir(full_path) and self.config.gameVersionExists(
             full_path, self.settings, self.settings.selectedOs
           ):
-            thing = listData(
+            thing: listData = listData(
               version=dirname,
               status=Statuses.localOnly,
               path=full_path,
@@ -1216,7 +1310,7 @@ class Launcher(QWidget):
             version_map[dirname] = thing
             local_versions.add(dirname)
       for rel in self.foundReleases:
-        version = rel.get("tag_name")
+        version: str | None = rel.get("tag_name")
         if version:
           if version in version_map:
             version_map[version].status = Statuses.local
@@ -1231,19 +1325,19 @@ class Launcher(QWidget):
               )
             )
 
-    sorted_data = self.sortVersions(all_items_data)
-    self.list.setUpdatesEnabled(False)
-    self.list.blockSignals(True)
+    sorted_data: list[Any] = self.sortVersions(all_items_data)
+    self.listWidget.setUpdatesEnabled(False)
+    self.listWidget.blockSignals(True)
     try:
       self.activeItemRefs.clear()
-      current_count = self.list.count()
-      target_count = len(sorted_data)
+      current_count: Any = self.listWidget.count()
+      target_count: int = len(sorted_data)
       if current_count < target_count:
         for _ in range(target_count - current_count):
           self.addVersionItem(version="loading", status=Statuses.loadingInfo)
       elif current_count > target_count:
         for _ in range(current_count - target_count):
-          self.list.takeItem(self.list.count() - 1)
+          self.listWidget.takeItem(self.listWidget.count() - 1)
 
       if self.gameName is not None:
         if os.path.isfile(
@@ -1258,9 +1352,9 @@ class Launcher(QWidget):
           )
       for i, data in enumerate(sorted_data):
         assert isinstance(data, listData)
-        item = self.list.item(i)
+        item: QListWidgetItem = self.listWidget.item(i)
 
-        widget = self.list.itemWidget(item)
+        widget: QWidget = self.listWidget.itemWidget(item)
         self.activeItemRefs[data.version] = widget
         assert isinstance(widget, VersionItemWidget)
         if self.settings.showLauncherImages:
@@ -1269,10 +1363,10 @@ class Launcher(QWidget):
           #   widget.setIcon(data.release["config"].getImage(data.version))
           # else:
           #   widget.setIcon(self.config.getImage(data.version))
-          imagePath = None
+          imagePath: None = None
           if data.status == Statuses.gameSelector:
             assert data.release is not None
-            imagePath = os.path.join(
+            imagePath: None = os.path.join(
               APP_DATA_PATH, "images/" + data.version + ".png"
             )
             print(imagePath)
@@ -1321,11 +1415,11 @@ class Launcher(QWidget):
         item.setData(Qt.ItemDataRole.UserRole, data)
     except Exception as e:
       print(f"Update Error: {e}")
-    self.list.blockSignals(False)
-    self.list.setUpdatesEnabled(True)
+    self.listWidget.blockSignals(False)
+    self.listWidget.setUpdatesEnabled(True)
 
   def loadLocalVersions(self):
-    self.list.clear()
+    self.listWidget.clear()
 
     if not os.path.isdir(self.VERSIONS_DIR):
       return
@@ -1344,11 +1438,11 @@ class Launcher(QWidget):
         version=dirname, status=Statuses.localOnly, path=full_path
       )
 
-  def sortVersions(self, versions_data):
-    versionThatWasLastRan = None
+  def sortVersions(self, versions_data) -> Any:
+    versionThatWasLastRan: None = None
     if self.GAME_ID != "-":
       try:
-        versionThatWasLastRan = f.read(
+        versionThatWasLastRan: None = f.read(
           os.path.join(
             APP_DATA_PATH,
             self.GAME_ID,
@@ -1358,22 +1452,28 @@ class Launcher(QWidget):
       except Exception as e:
         print("failed reading lastRanVersion", e)
 
-    def getSortKey(item):
+    def getSortKey(
+      item,
+    ) -> tuple[
+      Literal[1, 0], Literal[1, 0], Literal[1, 0], Literal[1, 0], int | Any
+    ]:
       version = item.version
       status = item.status
 
-      isLocalOnly = 1 if status == Statuses.localOnly else 0
+      isLocalOnly: Literal[1, 0] = 1 if status == Statuses.localOnly else 0
       # isNotDownloaded = 1 if status == Statuses.online else 0
 
-      isLastRanVersion = (
+      isLastRanVersion: Literal[1, 0] = (
         1
         if version == versionThatWasLastRan
         and (status == Statuses.local or status == Statuses.localOnly)
         else 0
       )
 
-      version_is_numeric = 1 if re.match(r"^-?\d+$", version) else 0
-      numeric_value = int(version) if version_is_numeric else 0
+      version_is_numeric: Literal[1, 0] = (
+        1 if re.match(r"^-?\d+$", version) else 0
+      )
+      numeric_value: int = int(version) if version_is_numeric else 0
 
       return (
         isLastRanVersion,
@@ -1388,14 +1488,14 @@ class Launcher(QWidget):
 
     return versions_data
 
-  def downloadAllVersions(self):
+  def downloadAllVersions(self) -> None:
     onlineCount = 0
-    items = []
-    for i in range(self.list.count()):
-      item = self.list.item(i)
+    items: list[Any] = []
+    for i in range(self.listWidget.count()):
+      item: Any = self.listWidget.item(i)
       data: listData = item.data(Qt.ItemDataRole.UserRole)
       if data and data.status == Statuses.online:
-        version = data.version
+        version: Any | str = data.version
         if version not in self.downloadingVersions:
           items.append(item.data(Qt.ItemDataRole.UserRole))
           onlineCount += 1
@@ -1407,40 +1507,42 @@ class Launcher(QWidget):
       print("No New Online Versions Found to Download.")
 
   class ReleaseFetchThread(QThread):
-    progress = Signal(int, int, list)
-    finished = Signal(list)
-    error = Signal(str)
+    progress: Signal = Signal(int, int, list)
+    onfinished: Signal = Signal(list)
+    error: Signal = Signal(str)
 
-    def __init__(self, API_URL, pat=None, max_pages=1):
+    def __init__(self, API_URL, pat=None, max_pages=1) -> None:
       super().__init__()
-      self.pat = pat
+      self.pat: Any | None = pat
       self.maxPages = max_pages
       self.API_URL = API_URL
 
-    def run(self):
+    def run(self) -> None:
       if OFFLINE:
-        self.finished.emit([])
+        self.onfinished.emit([])
         return
       try:
-        releases = []
-        headers = {"Authorization": f"token {self.pat}"} if self.pat else {}
+        releases: list[Any] = []
+        headers: dict[str, str] = (
+          {"Authorization": f"token {self.pat}"} if self.pat else {}
+        )
         page = 0
         if self.maxPages == 0:
-          rand = random.random()
+          rand: float = random.random()
           final_size = -1
 
-          head = requests.head(
+          head: Response = requests.head(
             f"{self.API_URL}?page=0&rand={rand}",
             headers=headers,
             timeout=10,
           )
           if "Link" in head.headers:
-            m = re.search(
+            m: Match[str] | None = re.search(
               r'\?page=(\d+)&rand=[\d.]+>; rel="last"',
               head.headers["Link"],
             )
             if m:
-              final_size = int(m.group(1)) + 1
+              final_size: int = int(m.group(1)) + 1
 
         while True:
           page += 1
@@ -1448,7 +1550,7 @@ class Launcher(QWidget):
           if self.maxPages > 0 and page > self.maxPages:
             break
 
-          r = requests.get(
+          r: Response = requests.get(
             f"{self.API_URL}?page={page}", headers=headers, timeout=30
           )
           if r.status_code != 200:
@@ -1464,72 +1566,76 @@ class Launcher(QWidget):
             releases,
           )
 
-        self.finished.emit(releases)
+        self.onfinished.emit(releases)
       except Exception as e:
         self.error.emit(str(e))
 
-  def goBackToSelector(self):
+  def goBackToSelector(self) -> None:
     if selectorConfig:
       # Re-run using the saved selector configuration
       run(selectorConfig, None)
       # Close the current game-specific launcher
-      self.close()
+      _ = self.close()
 
-  def __init__(self, config: Config, module_name):
+  def __init__(self, config: Config, module_name: str | None) -> None:
     global launcherUpdateAlreadyChecked
     super().__init__()
-    self.gameName = module_name
-    self.releaseFetchingThread: Any = None
-    self.config = config
-    self.settings = SettingsData()
-    self.activeItemRefs = {}
-    self.activeDownloads = {}
-    self.downloadQueue = []
+    self.gameName: str | None = module_name
+    self.releaseFetchingThread: Launcher.ReleaseFetchThread | None = None
+    self.config: Config = config
+    self.settings: SettingsData = SettingsData()
+    self.activeItemRefs: dict[str, VersionItemWidget] = {}
+    self.activeDownloads: dict[str, AssetDownloadThread] = {}
+    self.downloadQueue: list[tuple[str, str, str, str]] = []
     self.setWindowTitle(config.WINDOW_TITLE)
     self.setFixedSize(420, 600)
-    self.setStyleSheet(f.read(os.path.join(LAUNCHER_START_PATH, "main.css")))
-    self.GAME_ID = re.sub(
+    self.setStyleSheet(
+      cast(str, f.read(os.path.join(LAUNCHER_START_PATH, "main.css")))
+    )
+    self.GAME_ID: str = re.sub(
       r"_{2,}",
       "_",
       re.sub(
         r"[^\w\- ]", "_", f"{self.config.GH_USERNAME} - {self.config.GH_REPO}"
       ),
     ).strip()
-    self.VERSIONS_DIR = os.path.join(
+    self.VERSIONS_DIR: str = os.path.join(
       APP_DATA_PATH,
       self.GAME_ID,
       "versions",
     )
-    self.GLOBAL_SETTINGS_FILE = os.path.join(
+    self.GLOBAL_SETTINGS_FILE: str = os.path.join(
       APP_DATA_PATH, "launcherData/launcherSettings.json"
     )
-    self.LOCAL_SETTINGS_FILE = os.path.join(
+    self.LOCAL_SETTINGS_FILE: str = os.path.join(
       APP_DATA_PATH,
       self.GAME_ID,
       "launcherData/launcherSettings.json",
     )
 
-    main_layout = QVBoxLayout(self)
+    main_layout: QVBoxLayout = QVBoxLayout(self)
     if selectorConfig and selectorConfig != self.config:
-      back_btn = self.newButton("<- Back to Selector", self.goBackToSelector)
+      back_btn: QPushButton = self.newButton(
+        "<- Back to Selector", self.goBackToSelector
+      )
       # Style it differently if you want (optional)
       main_layout.addWidget(back_btn)
-    self.list = listWidget()
-    self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-    self.list.customContextMenuRequested.connect(self.showContextMenu)
-    main_layout.addWidget(self.list)
+    self.listWidget: QListWidget = QListWidget()
+    self.listWidget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+    _ = self.listWidget.customContextMenuRequested.connect(self.showContextMenu)
+    main_layout.addWidget(self.listWidget)
     if OFFLINE:
       offline_label = QLabel("OFFLINE MODE")
       offline_label.setStyleSheet("color: orange; font-weight: bold;")
       main_layout.addWidget(offline_label)
 
-    self.list.itemDoubleClicked.connect(self.onVersionDoubleClicked)
+    _ = self.listWidget.itemDoubleClicked.connect(self.onVersionDoubleClicked)
 
-    main_layout.addWidget(self.list)
+    main_layout.addWidget(self.listWidget)
 
-    self.widgetsToSave = {}
+    self.widgetsToSave: dict[Any, Any] = {}
 
-    self.mainProgressBar = VersionItemWidget("", MISSING_COLOR)
+    self.mainProgressBar: VersionItemWidget = VersionItemWidget("", MISSING_COLOR)
     main_layout.addWidget(self.mainProgressBar)
 
     self.setupSettingsDialog()
@@ -1538,10 +1644,11 @@ class Launcher(QWidget):
 
     main_layout.addWidget(self.newButton("Settings", self.openSettings))
     if DOWNLOAD_LAUNCHER:
-      sd = SettingsData()
-      sd.LAUNCHER_GH_USERNAME = DOWNLOAD_LAUNCHER[1] # type: ignore
-      sd.LAUNCHER_GH_REPO = DOWNLOAD_LAUNCHER[2] # type: ignore
-      sd.LAUNCHER_ASSET_NAME = DOWNLOAD_LAUNCHER[3] # type: ignore
+      assert isinstance(DOWNLOAD_LAUNCHER, str)
+      sd: SettingsData = SettingsData()
+      sd.LAUNCHER_GH_USERNAME = DOWNLOAD_LAUNCHER[1] # type: ignore # pyright: ignore[reportAttributeAccessIssue]
+      sd.LAUNCHER_GH_REPO = DOWNLOAD_LAUNCHER[2] # type: ignore # pyright: ignore[reportAttributeAccessIssue]
+      sd.LAUNCHER_ASSET_NAME = DOWNLOAD_LAUNCHER[3] # type: ignore # pyright: ignore[reportAttributeAccessIssue]
       self.updateSubLauncher(
         sd, # type: ignore
         listData(
@@ -1558,13 +1665,13 @@ class Launcher(QWidget):
       print(DOWNLOAD_LAUNCHER, "DOWNLOAD_LAUNCHER")
 
     if self.config.configs is not None:
-      self.VERSIONS_DIR = "///"
-      self.foundReleases = list(
-        map(
+      self.VERSIONS_DIR = "///" # pyright: ignore[reportConstantRedefinition]
+      self.foundReleases: list[dict[str, Any]] = list[dict[str, Any]](
+        map[dict[str, Any]](
           lambda x: {"tag_name": x, "config": config.configs[x], "path": paths[x]}, config.configs # type: ignore
         )
       )
-      self.list()
+      self.populateList()
       self.mainProgressBar.setModeDisabled()
       if not OFFLINE:
         if self.settings.checkForLauncherUpdatesWhenOpening:
@@ -1572,7 +1679,9 @@ class Launcher(QWidget):
             self.updateLauncher()
           launcherUpdateAlreadyChecked = True
       return
-    self.API_URL = f"https://api.github.com/repos/{self.config.GH_USERNAME}/{self.config.GH_REPO}/releases"
+    self.API_URL: str = (
+      f"https://api.github.com/repos/{self.config.GH_USERNAME}/{self.config.GH_REPO}/releases"
+    )
     os.makedirs(
       os.path.join(
         APP_DATA_PATH,
@@ -1591,7 +1700,7 @@ class Launcher(QWidget):
         "[]",
       )
     )
-    self.list()
+    self.populateList()
     if not OFFLINE:
       if self.settings.checkForLauncherUpdatesWhenOpening:
         if not launcherUpdateAlreadyChecked:
@@ -1607,8 +1716,8 @@ class Launcher(QWidget):
     else:
       self.mainProgressBar.setModeDisabled()
     if self.gameName and VERSION:
-      for i in range(self.list.count()):
-        item = self.list.item(i)
+      for i in range(self.listWidget.count()):
+        item: Any = self.listWidget.item(i)
         data: listData = item.data(Qt.ItemDataRole.UserRole)
         if not data:
           continue
@@ -1622,26 +1731,26 @@ class Launcher(QWidget):
           ):
             self.startGameVersion(data)
 
-  def openSettings(self):
-    result = self.settingsDialog.exec()
+  def openSettings(self) -> None:
+    result: int = self.settingsDialog.exec()
     if result == QDialog.DialogCode.Accepted:
       print("Saving settings...")
       self.saveUserSettings()
-      self.list()
+      self.populateList()
     else:
       print("Changes discarded. Reverting UI...")
       self.loadUserSettings()
 
-  def showContextMenu(self, pos):
-    item = self.list.itemAt(pos)
+  def showContextMenu(self, pos:QPoint) -> None:
+    item: Any = self.listWidget.itemAt(pos)
     if not item:
       return
 
     data: listData = item.data(Qt.ItemDataRole.UserRole)
-    menu = QMenu(self)
+    menu: QMenu = QMenu(self)
 
-    def newAction(text: str, onclick: Callable):
-      run_action = menu.addAction(text)
+    def newAction(text: str, onclick: Callable) -> None:
+      run_action: QAction = menu.addAction(text)
       run_action.triggered.connect(onclick)
 
     print(data.status)
@@ -1651,7 +1760,7 @@ class Launcher(QWidget):
         if self.config.configs[data.version].LAUNCHER_ASSET_NAME:
           menu.addAction(
             "Update",
-            bind(
+            bind[None](
               self.updateSubLauncher,
               self.config.configs[data.version],
               data,
@@ -1666,7 +1775,7 @@ class Launcher(QWidget):
       if data.path:
         newAction("Open Folder", lambda: self.openFile(data.path)) # type: ignore
         newAction(
-          f"Delete Version {data.version}", lambda: (shutil.rmtree(data.path), self.list()) # type: ignore
+          f"Delete Version {data.version}", lambda: (shutil.rmtree(data.path), self.populateList()) # type: ignore
         )
       if data.release:
         newAction(
@@ -1674,11 +1783,11 @@ class Launcher(QWidget):
           lambda: self.startQueuedDownloadRequest(data),
         )
 
-    menu.addSeparator()
+    _ = menu.addSeparator()
     self.config.addContextMenuOptions(self, data, menu, newAction)
-    menu.exec(self.list.mapToGlobal(pos))
+    _ = menu.exec(self.listWidget.mapToGlobal(pos))
 
-  def startFetch(self, max_pages=1, noDefaultConnections=False):
+  def startFetch(self, max_pages:int=1, noDefaultConnections:bool=False):
     """Standard fetch with a page limit."""
     if self.releaseFetchingThread and self.releaseFetchingThread.isRunning():
       return
@@ -1702,46 +1811,46 @@ class Launcher(QWidget):
       self.releaseFetchingThread.finished.connect(self.onReleaseFinished)
     self.releaseFetchingThread.start()
 
-  def mergeReleases(self, existing, new_data):
+  def mergeReleases(self, existing, new_data) -> list[Any]:
 
-    merged = {rel["tag_name"]: rel for rel in existing}
+    merged: dict[Any, Any] = {rel["tag_name"]: rel for rel in existing}
 
     for rel in new_data:
-      tag = rel.get("tag_name")
+      tag: Any = rel.get("tag_name")
       if tag:
         merged[tag] = rel
 
-    return list(merged.values())
+    return list[Any](merged.values())
 
-  def startFullFetch(self):
+  def startFullFetch(self) -> None:
     """Triggered by button to fetch everything."""
     print("Starting Full Release Fetch...")
     self.startFetch(max_pages=0)
 
-  def onReleaseProgress(self, page, total, releases):
+  def onReleaseProgress(self, page, total, releases) -> None:
     self.mainProgressBar.setModeKnownEnd()
     self.mainProgressBar.setProgress((page / total) * 100)
     self.foundReleases = self.mergeReleases(self.foundReleases, releases)
     self.mainProgressBar.label.setText(
       f"Fetching {total} Page{'' if total==1 else 's'}... {(page / total) * 100}% - {page} / {total}"
     )
-    self.list()
+    self.populateList()
 
-  def onReleaseFinished(self, releases):
+  def onReleaseFinished(self, releases) -> None:
     self.mainProgressBar.label.setText("")
     self.mainProgressBar.setModeDisabled()
     self.foundReleases = self.mergeReleases(self.foundReleases, releases)
-    self.list()
+    self.populateList()
 
-  def setupSettingsDialog(self):
-    self.settingsDialog = QDialog(self)
+  def setupSettingsDialog(self) -> None:
+    self.settingsDialog: QDialog = QDialog(self)
     self.settingsDialog.setWindowTitle("Settings")
     self.settingsDialog.setFixedWidth(600)
-    outerLayout = QVBoxLayout(self.settingsDialog)
+    outerLayout: QVBoxLayout = QVBoxLayout(self.settingsDialog)
 
     # region launcher
-    groupBox = QGroupBox("Launcher Settings")
-    groupLayout = QVBoxLayout()
+    groupBox: QGroupBox = QGroupBox("Launcher Settings")
+    groupLayout: QVBoxLayout = QVBoxLayout()
 
     groupLayout.addWidget(
       self.newCheckbox(
@@ -1757,7 +1866,7 @@ class Launcher(QWidget):
       )
     )
 
-    def toggleAlwaysOnTop(win: Launcher, on):
+    def toggleAlwaysOnTop(win: Launcher, on) -> None:
       win.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, on)
       win.show()
 
@@ -1766,7 +1875,7 @@ class Launcher(QWidget):
         "Keep Launcher Always on Top",
         False,
         "keepLauncherAlwaysOnTop",
-        onChange=bind(toggleAlwaysOnTop, self),
+        onChange=bind[None](toggleAlwaysOnTop, self),
       )
     )
 
@@ -1786,8 +1895,8 @@ class Launcher(QWidget):
     outerLayout.addWidget(groupBox)
     # endregion
     # region global
-    groupBox = QGroupBox("Global Settings (All Games)")
-    groupLayout = QVBoxLayout()
+    groupBox: QGroupBox = QGroupBox("Global Settings (All Games)")
+    groupLayout: QVBoxLayout = QVBoxLayout()
 
     groupLayout.addWidget(
       self.newCheckbox(
@@ -1810,7 +1919,7 @@ class Launcher(QWidget):
       )
     )
 
-    fetchBtnRow = QHBoxLayout()
+    fetchBtnRow: QHBoxLayout = QHBoxLayout()
     assert isinstance(self.settings.maxPagesOnLoad, int)
     fetchBtnRow.addWidget(
       self.newButton(
@@ -1845,11 +1954,11 @@ class Launcher(QWidget):
     outerLayout.addWidget(groupBox)
     # endregion
     # region local
-    groupBox = QGroupBox(
+    groupBox: QGroupBox = QGroupBox(
       f"Local Settings ({self.gameName or "Default Settings For New Launchers"})"
     )
-    groupLayout = QVBoxLayout()
-    self.localKeys = [
+    groupLayout: QVBoxLayout = QVBoxLayout()
+    self.localKeys: list[str] = [
       "extraGameArgs",
       "replaceDuplicateGameFilesWithHardlinks",
       "useCentralGameDataFolder",
@@ -1908,19 +2017,19 @@ class Launcher(QWidget):
       )
     )
     if self.config.addCustomNodes:
-      lastWidgetCount = len(self.widgetsToSave)
+      lastWidgetCount: int = len(self.widgetsToSave)
       self.config.addCustomNodes(self, groupLayout)
-      for key in islice(self.widgetsToSave.keys(), lastWidgetCount, None):
+      for key in islice[Any](self.widgetsToSave.keys(), lastWidgetCount, None):
         if key not in self.localKeys:
           self.localKeys.append(key)
 
     groupBox.setLayout(groupLayout)
     outerLayout.addWidget(groupBox)
 
-    bottom_btn_layout = QHBoxLayout()
-    cancel_btn = QPushButton("Cancel")
+    bottom_btn_layout: QHBoxLayout = QHBoxLayout()
+    cancel_btn: QPushButton = QPushButton("Cancel")
     cancel_btn.clicked.connect(self.settingsDialog.reject)
-    done_btn = QPushButton("Done")
+    done_btn: QPushButton = QPushButton("Done")
     done_btn.setDefault(True)
     done_btn.clicked.connect(self.settingsDialog.accept)
 
@@ -1934,28 +2043,28 @@ class Launcher(QWidget):
     launcherSettings: Optional[Config] = None,
     data: Optional[listData] = None,
     widget: Optional[VersionItemWidget] = None,
-  ):
-    ls = launcherSettings or self.config
+  ) -> None:
+    ls: Config = launcherSettings or self.config
 
     # If no data object provided (e.g. from Settings button),
     # create a mock one or find the one matching the current game
     if data is None:
       # Assuming current running file is the target
-      current_path = os.path.abspath(os.path.join(APP_DATA_PATH, sys.modules[self.gameName].__file__)) # type: ignore
-      data = listData(
+      current_path: Any = os.path.abspath(os.path.join(APP_DATA_PATH, sys.modules[self.gameName].__file__)) # type: ignore
+      data: listData = listData(
         version=self.gameName,
         path=current_path,
         release=None,
         status=Statuses.gameSelector,
       )
 
-    tag = data.version
+    tag: str = data.version
     if not widget:
-      widget = self.activeItemRefs.get(tag)
+      widget: VersionItemWidget | None = self.activeItemRefs.get(tag)
     assert isinstance(widget, VersionItemWidget)
     widget.setModeKnownEnd()
 
-    def on_progress(progress):
+    def on_progress(progress) -> None:
       widget.setProgress(progress)
 
     self.downloadingVersions.append(tag)
@@ -1965,15 +2074,15 @@ class Launcher(QWidget):
     out_file = os.path.join(dest_dir, ls.LAUNCHER_ASSET_NAME)
     os.makedirs(dest_dir, exist_ok=True)
 
-    dl_thread = AssetDownloadThread(
+    dl_thread: AssetDownloadThread = AssetDownloadThread(
       f"https://github.com/{ls.LAUNCHER_GH_USERNAME or ls.GH_USERNAME}/{ls.LAUNCHER_GH_REPO or ls.GH_REPO}/releases/latest/download/{ls.LAUNCHER_ASSET_NAME}",
       out_file,
     )
     self.activeDownloads[tag] = dl_thread
 
-    def on_finished(path):
+    def on_finished(path) -> None:
       widget.setModeDisabled()
-      found = {"py": False, "png": False}
+      found: dict[str, bool] = {"py": False, "png": False}
       extracted = False
       try:
         if path.endswith(".zip"):
@@ -2022,13 +2131,13 @@ class Launcher(QWidget):
         self.activeDownloads.pop(tag, None)
         self.activeDownloads.pop(f"meta_{tag}", None)
         shutil.rmtree(dest_dir, ignore_errors=True)
-        self.list()
+        self.populateList()
         if found["py"]:
           self.showRestartPrompt(f"{tag} updated successfully.")
 
     dl_thread.progress.connect(on_progress)
-    dl_thread.finished.connect(on_finished)
-    dl_thread.finished.connect(dl_thread.deleteLater)
+    dl_thread.onfinished.connect(on_finished)
+    dl_thread.onfinished.connect(dl_thread.deleteLater)
     dl_thread.start()
 
   # def updateSubLauncher(
@@ -2141,7 +2250,7 @@ class Launcher(QWidget):
   #         self.activeDownloads.pop(tag, None)
   #         self.activeDownloads.pop(f"meta_{tag}", None)
   #         shutil.rmtree(dest_dir, ignore_errors=True)
-  #         self.list()
+  #         self.populateList()
   #         if found["py"]:
   #           self.showRestartPrompt(f"{tag} updated successfully.")
 
@@ -2155,15 +2264,15 @@ class Launcher(QWidget):
   #   self.activeDownloads[f"meta_{tag}"] = fetcher
   #   fetcher.start()
 
-  def showRestartPrompt(self, text):
-    def restart():
-      script_path = f'"{os.path.abspath(sys.argv[0])}"'
-      executable = f'"{sys.executable}"'
+  def showRestartPrompt(self, text: str) -> None:
+    def restart() -> Never:
+      script_path: str = f'"{os.path.abspath(sys.argv[0])}"'
+      executable: str = f'"{sys.executable}"'
 
       # We pass the quoted executable as the path and arg0,
       # then the quoted script path, then the rest of the args.
 
-      args = buildArgs(
+      args: list[str] = buildArgs(
         *[d for d in ALL_ARG_DATA if d.key != "downloadLauncher"],
         useArgs=LAST_USED_ARGS,
       )
@@ -2187,11 +2296,11 @@ class Launcher(QWidget):
       case 2:
         restart()
 
-  def openFile(self, p: str):
+  def openFile(self, p: str) -> bool:
     return QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.abspath(p)))
 
-  def newSpinBox(self, min_val, max_val, default, saveId, width=60):
-    node = QSpinBox()
+  def newSpinBox(self, min_val, max_val, default, saveId, width=60) -> QSpinBox:
+    node: QSpinBox = QSpinBox()
     node.setRange(min_val, max_val)
     node.setValue(default)
     node.setFixedWidth(width)
@@ -2203,92 +2312,95 @@ class Launcher(QWidget):
     self.widgetsToSave[saveId] = node
     return node
 
-  def newButton(self, text, onclick):
-    node = QPushButton(text)
-    node.pressed.connect(onclick)
+  def newButton(self, text: str, onclick: Callable[[], None] | None) -> QPushButton:
+    node: QPushButton = QPushButton(text)
+    if onclick is not None:
+      _ = node.pressed.connect(onclick)
     return node
 
-  def newLabel(self, label_text, widget, addStretch=True):
-    """Creates a horizontal row with a label and a widget."""
-    row = QHBoxLayout()
+  def newLabel(
+    self, label_text: str, widget: QWidget, addStretch: bool = True
+  ) -> QHBoxLayout:
+    row: QHBoxLayout = QHBoxLayout()
     row.addWidget(QLabel(label_text))
     row.addWidget(widget)
     if addStretch:
       row.addStretch()
     return row
 
-  def newCheckbox(self, text, default, saveId, tooltip="", onChange=None):
-    node = QCheckBox(text)
+  def newCheckbox(
+    self,
+    text: str,
+    default: bool,
+    saveId: str,
+    tooltip: str = "",
+    onChange: Callable[[bool], None] | None = None,
+  ) -> QCheckBox:
+    node: QCheckBox = QCheckBox(text)
     node.setChecked(default)
     if tooltip:
       node.setToolTip(tooltip)
     if onChange:
-      node.toggled.connect(onChange)
-
-    node.toggled.connect(lambda v: setattr(self.settings, saveId, v))
+      _ = node.toggled.connect(onChange)
+    _ = node.toggled.connect(lambda v: setattr(self.settings, saveId, v))
     setattr(self.settings, saveId, default)
-
     self.widgetsToSave[saveId] = node
     return node
 
-  def newLineEdit(self, placeholder, saveId, password=False):
-    node = QLineEdit()
+  def newLineEdit(
+    self, placeholder: str, saveId: str, password: bool = False
+  ) -> QLineEdit:
+    node: QLineEdit = QLineEdit()
     node.setPlaceholderText(placeholder)
     if password:
       node.setEchoMode(QLineEdit.EchoMode.Password)
-
-    node.textChanged.connect(lambda v: setattr(self.settings, saveId, v))
+    _ = node.textChanged.connect(lambda v: setattr(self.settings, saveId, v))
     setattr(self.settings, saveId, "")
-
     self.widgetsToSave[saveId] = node
     return node
 
   def newSelectBox(
     self,
-    values: Type[Enum] | list[str] | dict[str, Any] | set[str],
-    default_value,
-    saveId,
-  ):
-    node = QComboBox()
-
-    node.usesEnum = False # type: ignore
+    values: type[Enum] | list[str] | dict[str, object] | set[str],
+    default_value: int,
+    saveId: str,
+  ) -> EnumComboBox:
+    node: EnumComboBox = EnumComboBox()
+    node.usesEnum = False
     if isinstance(values, EnumMeta):
-      node.usesEnum = True # type: ignore
-      node.usedEnum = values # type: ignore
+      node.usesEnum = True
+      node.usedEnum = values
       for thing in values:
         node.addItem(thing.name, thing)
     elif isinstance(values, list):
-      i = -1
-      for thing in values:
-        i += 1
+      for i, thing in enumerate(values):
         node.addItem(thing, i)
     elif isinstance(values, dict):
       for k, v in values.items():
         node.addItem(k, v)
     node.setCurrentIndex(default_value)
-    node.currentIndexChanged.connect(
+    _ = node.currentIndexChanged.connect(
       lambda: setattr(self.settings, saveId, node.currentData())
     )
     setattr(self.settings, saveId, default_value)
-
     self.widgetsToSave[saveId] = node
     return node
 
 
-_current_window = None
+_current_window: Launcher | None = None
 
 
-def run(config: Config, module_name):
+def run(config: Config, module_name: str | None) -> None:
   global _current_window
 
   is_new_app = False
-  app = QApplication.instance()
+  app: QCoreApplication | None = QApplication.instance()
   if not app:
     app = QApplication(sys.argv)
     is_new_app = True
 
   # Save the old geometry if a window is currently open
-  _last_geometry = None
+  _last_geometry: QByteArray | None = None
   if _current_window is not None:
     _last_geometry = _current_window.saveGeometry()
 
@@ -2302,29 +2414,30 @@ def run(config: Config, module_name):
 
   if is_new_app: # Only exec if loop isn't running
     if LAUNCHER_TO_LAUNCH in modules:
-      lwin = _current_window
+      lwin: None = _current_window
       run(modules[LAUNCHER_TO_LAUNCH], LAUNCHER_TO_LAUNCH)
       lwin.close()
     sys.exit(app.exec())
 
 
-modules = {}
-paths = {}
+modules: dict[str, Config] = {}
+paths: dict[str, str] = {}
 _is_selector_loading = False
 
 
-def loadConfig(config: Config):
+def loadConfig(config: Config) -> None:
   # 1. Get the actual main module (the one running the loop)
-  main_app = sys.modules["__main__"]
+  main_app: ModuleType = sys.modules["__main__"]
 
-  caller_frame = inspect.stack()[1]
-  caller_filename = caller_frame.filename
-  module_name = Path(caller_filename).stem
+  caller_frame: FrameInfo = inspect.stack()[1]
+  caller_filename: str = caller_frame.filename
+  module_name: str = Path(caller_filename).stem
   # 2. Check if the main app has the 'modules' list (meaning we are in the Selector)
   # _is_selector_loading is for if ran like `launcher`
   # hasattr(main_app, "modules") and isinstance(main_app.modules, dict) is for if ran like `python ./__init__.py`
   if _is_selector_loading or (
-    hasattr(main_app, "modules") and isinstance(main_app.modules, dict)
+    hasattr(main_app, "modules")
+    and isinstance(main_app.modules, dict) # pyright: ignore[reportAny]
   ):
     # We are inside the selector loop!
     # Use 'inspect' to automatically find the name of the file calling this function
@@ -2337,8 +2450,12 @@ def loadConfig(config: Config):
         config.hadErrorLoading = True
       paths[module_name] = os.path.abspath(caller_filename)
     else:
-      main_app.paths[module_name] = os.path.abspath(caller_filename)
-      main_app.modules[module_name] = config
+      main_app.paths[module_name] = os.path.abspath(
+        caller_filename
+      ) # pyright: ignore[reportAny]
+      main_app.modules[module_name] = (
+        config # pyright: ignore[reportUnknownMemberType]
+      )
   else:
     # We are NOT in the selector (User ran "python mygame.py" directly)
     run(config, module_name)
@@ -2347,7 +2464,7 @@ def loadConfig(config: Config):
 importHavingError: str | None = None
 
 
-def findAllLaunchables():
+def findAllLaunchables() -> None:
   global selectorConfig, _is_selector_loading
   import importlib
 
@@ -2367,22 +2484,28 @@ def findAllLaunchables():
     if filename.endswith(".py") and filename != "__init__.py":
       module_name = filename[:-3]
       try:
-        importlib.import_module(module_name)
+        _ = importlib.import_module(module_name)
       except Exception as e:
         paths[module_name] = os.path.abspath(filename)
-        global Config, importHavingError
+        global importHavingError
         importHavingError = f"{e}"
-        temp = Config
 
-        def a(**kwargs):
-          sd = SettingsData()
+        this_module = sys.modules[__name__]
+        original_config: Config = ( # pyright: ignore[reportAny]
+          this_module.Config
+        )
+
+        def a(**kwargs: object) -> SettingsData:
+          sd: SettingsData = SettingsData()
           for k, v in kwargs.items():
             setattr(sd, k, v)
           return sd
 
-        Config = a # type: ignore
-        importlib.import_module(module_name)
-        Config = temp
+        this_module.Config = a # pyright: ignore[reportAttributeAccessIssue]
+        _ = importlib.import_module(module_name)
+        this_module.Config = ( # pyright: ignore[reportAttributeAccessIssue]
+          original_config
+        )
         print("error loading launcher", module_name, e)
 
   selectorConfig = Config(
@@ -2397,7 +2520,7 @@ def findAllLaunchables():
 
 
 # def checkImageExtension(p):
-#   # Check if any of the extensions exist
+#   # Check if object of the extensions exist
 #   extensions = ("jpg", "jpeg", "png", "webp")
 #   return next(
 #     (p + "." + ext for ext in extensions if os.path.isfile(p + "." + ext)),

@@ -19,19 +19,20 @@
         python = pkgs.python313;
         ps = python.pkgs;
 
-        pythonDeps = [
-          ps.brotli
-          ps.certifi
-          ps.charset-normalizer
-          ps.idna
-          ps.psutil
-          ps.py7zr
-          ps.pycryptodomex
-          ps.pyside6
-          ps.requests
-          ps.texttable
-          ps.urllib3
-          ps.types-requests # Add this for Zuban/Pyright
+        pythonDeps = with ps; [
+          brotli
+          certifi
+          charset-normalizer
+          idna
+          psutil
+          py7zr
+          pycryptodomex
+          pyside6
+          requests
+          texttable
+          urllib3
+          types-requests # Add this for Zuban/Pyright
+          typing-extensions # Add this for Zuban/Pyright
         ];
 
         launcher = ps.buildPythonApplication {
