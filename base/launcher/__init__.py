@@ -115,7 +115,7 @@ def checkArgs(*argData: ArgumentData, useArgs: list[str] | None = None) -> list[
         ),
         None,
       )
-      if  idx is None:
+      if idx is None:
         argsBeingUsed.pop(i)
         continue
       if afterCount == 0:
@@ -146,8 +146,8 @@ def checkArgs(*argData: ArgumentData, useArgs: list[str] | None = None) -> list[
           results[idx] = foundKey.default
 
       elif afterCount > 1:
-        # If afterCount > 1, return the next `afterCount` arguments
-        if len(argsBeingUsed) >= i + 1 + afterCount:
+        available_values = len(argsBeingUsed) - i - 1 # exclude the key itself
+        if available_values >= afterCount:
           values = argsBeingUsed[i + 1 : i + 1 + afterCount]
           argsBeingUsed = (
             argsBeingUsed[:i] + argsBeingUsed[i + 1 + afterCount :]
@@ -161,7 +161,7 @@ def checkArgs(*argData: ArgumentData, useArgs: list[str] | None = None) -> list[
             afterCount,
             "args",
             "but received",
-            len(argsBeingUsed),
+            available_values, # ← was len(argsBeingUsed), which included the key
             "args",
           )
           argsBeingUsed = []
@@ -181,6 +181,12 @@ def checkArgs(*argData: ArgumentData, useArgs: list[str] | None = None) -> list[
 selectorConfig = None
 
 LAUNCHER_START_PATH = os.path.abspath(os.path.dirname(__file__))
+APP_DATA_PATH = os.path.abspath(
+  os.path.join(
+    os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")),
+    "launcher",
+  )
+)
 
 ALL_ARG_DATA = (
   ArgumentData(key="offline", afterCount=0),
@@ -191,6 +197,8 @@ ALL_ARG_DATA = (
   ArgumentData(key="registerProtocols", afterCount=0),
   ArgumentData(key="downloadLauncher", afterCount=4),
 )
+
+os.makedirs(os.path.join(APP_DATA_PATH, "launcherData"), exist_ok=True)
 
 
 def buildArgs(*argData: ArgumentData, useArgs: list[str]) -> list[str]:
@@ -272,6 +280,7 @@ def protoCalled(msg: str): # type: ignore
   #     print(msg)
   #   case _:
   #     print("failed to find valid match", msg)
+
 
 if PROTO.isSelf("multi-game-launcher") or REGISTER_PROTOCOLS: # type: ignore
   PROTO.add("multi-game-launcher", protoCalled, True)
@@ -701,6 +710,8 @@ class VersionItemWidget(QWidget):
 
 
 from typing import Any
+os.makedirs(os.path.join(APP_DATA_PATH, "launcherData"), exist_ok=True)
+os.makedirs(os.path.join(APP_DATA_PATH, "images"), exist_ok=True)
 
 
 class SettingsData:
@@ -824,10 +835,11 @@ class Launcher(QWidget):
 
     try:
       defaultLocalSettingsFile = os.path.join(
-        LAUNCHER_START_PATH if True else "",
+        APP_DATA_PATH,
         "-",
         "launcherData/launcherSettings.json",
       )
+      os.makedirs(os.path.join(APP_DATA_PATH, "-", "launcherData"), exist_ok=True)
       if os.path.exists(defaultLocalSettingsFile):
         with open(defaultLocalSettingsFile, "r", encoding="utf-8") as f:
           local_data = json.load(f)
@@ -959,7 +971,7 @@ class Launcher(QWidget):
     gdl = self.getGameDataLocation(data.version)
     f.write(
       os.path.join(
-        (LAUNCHER_START_PATH if True else ""),
+        (APP_DATA_PATH),
         self.GAME_ID,
         "launcherData/lastRanVersion.txt",
       ),
@@ -981,7 +993,7 @@ class Launcher(QWidget):
       and self.settings.useCentralGameDataFolder
     )
     gdl: str = os.path.join(
-      (LAUNCHER_START_PATH if True else ""),
+      (APP_DATA_PATH),
       self.GAME_ID,
       "gameData",
     )
@@ -1114,7 +1126,7 @@ class Launcher(QWidget):
       try:
         f.write(
           os.path.join(
-            (LAUNCHER_START_PATH if True else ""),
+            (APP_DATA_PATH),
             self.GAME_ID,
             "launcherData/cache/releases.json",
           ),
@@ -1184,8 +1196,16 @@ class Launcher(QWidget):
           self.versionList.takeItem(self.versionList.count() - 1)
 
       if self.gameName is not None:
-        if os.path.isfile("images/" + self.gameName + ".png"):
-          self.setWindowIcon(QIcon("images/" + self.gameName + ".png"))
+        if os.path.isfile(
+          os.path.join(APP_DATA_PATH, "images/" + self.gameName + ".png")
+        ):
+          self.setWindowIcon(
+            QIcon(
+              os.path.join(
+                APP_DATA_PATH, "images/" + self.gameName + ".png"
+              )
+            )
+          )
       for i, data in enumerate(sorted_data):
         assert isinstance(data, ItemListData)
         item = self.versionList.item(i)
@@ -1202,7 +1222,9 @@ class Launcher(QWidget):
           imagePath = None
           if data.status == Statuses.gameSelector:
             assert data.release is not None
-            imagePath = "images/" + data.version + ".png"
+            imagePath = os.path.join(
+              APP_DATA_PATH, "images/" + data.version + ".png"
+            )
             print(imagePath)
           widget.setIcon(imagePath)
         else:
@@ -1278,7 +1300,7 @@ class Launcher(QWidget):
       try:
         versionThatWasLastRan = f.read(
           os.path.join(
-            LAUNCHER_START_PATH if True else "",
+            APP_DATA_PATH,
             self.GAME_ID,
             "launcherData/lastRanVersion.txt",
           )
@@ -1424,15 +1446,15 @@ class Launcher(QWidget):
       ),
     ).strip()
     self.VERSIONS_DIR = os.path.join(
-      LAUNCHER_START_PATH if True else "",
+      APP_DATA_PATH,
       self.GAME_ID,
       "versions",
     )
     self.GLOBAL_SETTINGS_FILE = os.path.join(
-      LAUNCHER_START_PATH, "launcherData/launcherSettings.json"
+      APP_DATA_PATH, "launcherData/launcherSettings.json"
     )
     self.LOCAL_SETTINGS_FILE = os.path.join(
-      LAUNCHER_START_PATH if True else "",
+      APP_DATA_PATH,
       self.GAME_ID,
       "launcherData/launcherSettings.json",
     )
@@ -1474,8 +1496,7 @@ class Launcher(QWidget):
         sd, # type: ignore
         ItemListData(
           path=os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "../..",
+            APP_DATA_PATH,
             DOWNLOAD_LAUNCHER[0] + ".py",
           ),
           release=None,
@@ -1502,11 +1523,9 @@ class Launcher(QWidget):
           launcherUpdateAlreadyChecked = True
       return
     self.API_URL = f"https://api.github.com/repos/{self.config.GH_USERNAME}/{self.config.GH_REPO}/releases"
-    os.makedirs(os.path.join(LAUNCHER_START_PATH, "launcherData"), exist_ok=True)
-    os.makedirs("images", exist_ok=True)
     os.makedirs(
       os.path.join(
-        LAUNCHER_START_PATH if True else "",
+        APP_DATA_PATH,
         self.GAME_ID,
         "launcherData/cache",
       ),
@@ -1515,7 +1534,7 @@ class Launcher(QWidget):
     self.foundReleases = json.loads(
       f.read(
         os.path.join(
-          (LAUNCHER_START_PATH if True else ""),
+          (APP_DATA_PATH),
           self.GAME_ID,
           "launcherData/cache/releases.json",
         ),
@@ -1872,7 +1891,7 @@ class Launcher(QWidget):
     # create a mock one or find the one matching the current game
     if data is None:
       # Assuming current running file is the target
-      current_path = os.path.abspath(sys.modules[self.gameName].__file__) # type: ignore
+      current_path = os.path.abspath(os.path.join(APP_DATA_PATH, sys.modules[self.gameName].__file__)) # type: ignore
       data = ItemListData(
         version=self.gameName,
         path=current_path,
@@ -1891,7 +1910,7 @@ class Launcher(QWidget):
 
     self.downloadingVersions.append(tag)
     dest_dir = os.path.join(
-      os.path.abspath(os.path.join(LAUNCHER_START_PATH, "-")), f"temp_{tag}"
+      os.path.abspath(os.path.join(APP_DATA_PATH, "-")), f"temp_{tag}"
     )
     out_file = os.path.join(dest_dir, ls.LAUNCHER_ASSET_NAME)
     os.makedirs(dest_dir, exist_ok=True)
@@ -1921,6 +1940,7 @@ class Launcher(QWidget):
           for root, _, files in os.walk(dest_dir):
             if f"{tag}.png" in files:
               if data.path:
+                print(os.path.dirname(data.path), "os.path.dirname(data.path)")
                 imgpath = os.path.join(
                   os.path.dirname(data.path),
                   "images",
@@ -2013,7 +2033,7 @@ class Launcher(QWidget):
 
   #     self.downloadingVersions.append(tag)
   #     dest_dir = os.path.join(
-  #       os.path.abspath(os.path.join(LAUNCHER_START_PATH, "-")), f"temp_{tag}"
+  #       os.path.abspath(os.path.join(APP_DATA_PATH, "-")), f"temp_{tag}"
   #     )
   #     out_file = os.path.join(dest_dir, asset["name"])
   #     os.makedirs(dest_dir, exist_ok=True)
@@ -2090,18 +2110,13 @@ class Launcher(QWidget):
       # We pass the quoted executable as the path and arg0,
       # then the quoted script path, then the rest of the args.
 
-      args= buildArgs(
+      args = buildArgs(
         *[d for d in ALL_ARG_DATA if d.key != "downloadLauncher"],
         useArgs=LAST_USED_ARGS,
       )
       print("NEW ARGS", args)
       # buildArgs(LAST_USED_ARGS)
-      os.execl(
-        sys.executable,
-        executable,
-        script_path,
-        *args
-      )
+      os.execl(sys.executable, executable, script_path, *args)
 
     print(self.settings.onRestartRequired)
     match self.settings.onRestartRequired:
@@ -2292,7 +2307,7 @@ def findAllLaunchables():
     linux = 1
 
   _is_selector_loading = True
-  sys.path.append(os.path.abspath("."))
+  sys.path.append(os.path.abspath(APP_DATA_PATH))
   print("Current Working Directory:", os.getcwd())
 
   for filename in os.listdir():
@@ -2339,7 +2354,7 @@ def findAllLaunchables():
 
 if __name__ == "__main__":
   findAllLaunchables()
-# LAUNCHER_START_PATH
+# APP_DATA_PATH
 #             if True
 #             else ""
 # self.settings.centralGameDataLocations
