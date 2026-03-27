@@ -181,12 +181,25 @@ def checkArgs(*argData: ArgumentData, useArgs: list[str] | None = None) -> list[
 selectorConfig = None
 
 LAUNCHER_START_PATH = os.path.abspath(os.path.dirname(__file__))
-APP_DATA_PATH = os.path.abspath(
-  os.path.join(
-    os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")),
-    "launcher",
-  )
-)
+
+
+def get_app_data_path():
+  app_name = "launcher"
+
+  if sys.platform == "win32":
+    # Windows standard: ~/AppData/Local
+    base = os.environ.get("LOCALAPPDATA", os.path.expanduser("~/AppData/Local"))
+  elif sys.platform == "darwin":
+    # macOS standard: ~/Library/Application Support
+    base = os.path.expanduser("~/Library/Application Support")
+  else:
+    # Linux/Unix XDG standard
+    base = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
+
+  return os.path.abspath(os.path.join(base, app_name))
+
+
+APP_DATA_PATH = get_app_data_path()
 
 ALL_ARG_DATA = (
   ArgumentData(key="offline", afterCount=0),
@@ -710,6 +723,7 @@ class VersionItemWidget(QWidget):
 
 
 from typing import Any
+
 os.makedirs(os.path.join(APP_DATA_PATH, "launcherData"), exist_ok=True)
 os.makedirs(os.path.join(APP_DATA_PATH, "images"), exist_ok=True)
 
@@ -1940,7 +1954,10 @@ class Launcher(QWidget):
           for root, _, files in os.walk(dest_dir):
             if f"{tag}.png" in files:
               if data.path:
-                print(os.path.dirname(data.path), "os.path.dirname(data.path)")
+                print(
+                  os.path.dirname(data.path),
+                  "os.path.dirname(data.path)",
+                )
                 imgpath = os.path.join(
                   os.path.dirname(data.path),
                   "images",
