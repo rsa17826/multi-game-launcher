@@ -14,3 +14,4 @@
 **/*.lnk
 images/*
 images
+.direnv

@@ -31,6 +31,7 @@
           ps.requests
           ps.texttable
           ps.urllib3
+          ps.types-requests # Add this for Zuban/Pyright
         ];
 
         launcher = ps.buildPythonApplication {
@@ -59,6 +60,11 @@
 
         devShells.default = pkgs.mkShell {
           buildInputs = [ (python.withPackages (_: pythonDeps)) ];
+
+          # This creates a symlink so VS Code/Zuban finds the packages
+          shellHook = ''
+            ln -sfT $(python -c "import sys; print(sys.prefix)") .venv
+          '';
         };
 
         apps.default = {

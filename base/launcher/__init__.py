@@ -4,8 +4,8 @@
 # @endregex
 import shutil
 import inspect
-from dataclasses import dataclass, fields
-from typing import Callable, Dict, List, Any, Tuple, Optional
+from dataclasses import dataclass
+from typing import Callable, Any, Optional
 from functools import partial as bind
 from itertools import islice
 import sys
@@ -20,14 +20,14 @@ from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import (
   QApplication,
   QWidget,
-  QListWidget,
+  listWidget,
   QPushButton,
   QVBoxLayout,
   QHBoxLayout,
   QCheckBox,
   QLineEdit,
   QLabel,
-  QListWidgetItem,
+  listWidgetItem,
   QSpinBox,
   QDialog,
   QGroupBox,
@@ -59,7 +59,7 @@ os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 class ArgumentData:
   key: str | list[str]
   afterCount: int
-  default: Optional[Any] = None
+  default: object = None
 
   def __post_init__(self):
     if self.afterCount == 0:
@@ -73,9 +73,9 @@ class ArgumentData:
 LAST_USED_ARGS = []
 
 
-def checkArgs(*argData: ArgumentData, useArgs: list[str] | None = None) -> list[Any]:
+def checkArgs(*argData: ArgumentData, useArgs: list[str] | None = None) -> list[object]:
   if not useArgs:
-    args: List[str] = sys.argv[1:] # Ignore the script name, only check arguments
+    args: list[str] = sys.argv[1:] # Ignore the script name, only check arguments
     if "--" in args:
       beforeDashArgs = args[: args.index("--")]
     else:
@@ -84,10 +84,10 @@ def checkArgs(*argData: ArgumentData, useArgs: list[str] | None = None) -> list[
   else:
     argsBeingUsed = useArgs.copy()
   global LAST_USED_ARGS
-  LAST_USED_ARGS = argsBeingUsed.copy()
+  LAST_USED_ARGS = argsBeingUsed.copy() # pyright: ignore[reportConstantRedefinition]
   # print(beforeDashArgs, args)
   # Initialize results with the default values from argData
-  results: List[Any | None] = [data.default for data in argData]
+  results: list[object] = [data.default for data in argData]
 
   i = 0
   while i < len(argsBeingUsed):
@@ -116,23 +116,23 @@ def checkArgs(*argData: ArgumentData, useArgs: list[str] | None = None) -> list[
         None,
       )
       if idx is None:
-        argsBeingUsed.pop(i)
+        _ = argsBeingUsed.pop(i)
         continue
       if afterCount == 0:
         # If afterCount is 0, consume the key (do not use its value)
-        argsBeingUsed.pop(i)
+        _ = argsBeingUsed.pop(i)
         results[idx] = True # True for a valid flag
 
       elif afterCount == 1:
         # If afterCount is 1, consume the next argument as the value for the key
         if i + 1 < len(argsBeingUsed):
           value = argsBeingUsed[i + 1]
-          argsBeingUsed.pop(i) # Remove the key
-          argsBeingUsed.pop(i) # Remove the value
+          _ = argsBeingUsed.pop(i)
+          _ = argsBeingUsed.pop(i)
           results[idx] = value # Then the value
         else:
           # If no argument follows the key, use the default
-          argsBeingUsed.pop(i) # Remove the key
+          _ = argsBeingUsed.pop(i)
           print(
             "err",
             nextArg,
@@ -168,7 +168,7 @@ def checkArgs(*argData: ArgumentData, useArgs: list[str] | None = None) -> list[
 
     else:
       # If the key is invalid, just skip it and move to the next argument
-      argsBeingUsed.pop(i)
+      _ = argsBeingUsed.pop(i)
       continue # Skip to the next argument
 
     # Skip over the processed argument
@@ -242,7 +242,7 @@ os.makedirs(os.path.join(APP_DATA_PATH, "launcherData"), exist_ok=True)
 
 def buildArgs(*argData: ArgumentData, useArgs: list[str]) -> list[str]:
   # This will hold the final argument list
-  result_args = []
+  result_args: list[str] = []
 
   # Start building the argument list based on useArgs
   for i in range(0, len(useArgs)):
@@ -256,7 +256,8 @@ def buildArgs(*argData: ArgumentData, useArgs: list[str]) -> list[str]:
         if data.key == current_arg:
           matching_data = data
           break
-      elif isinstance(data.key, list):
+      else:
+        # elif isinstance(data.key, list):
         # If the key is a list, check if any key matches the current_arg
         if current_arg in data.key:
           matching_data = data
@@ -285,18 +286,25 @@ def buildArgs(*argData: ArgumentData, useArgs: list[str]) -> list[str]:
 
   return result_args
 
+OFFLINE: object = False
+LAUNCHER_TO_LAUNCH: object = None
+TRY_UPDATE: object = False
+HEADLESS: object = False
+VERSION: object = None
+REGISTER_PROTOCOLS: object = False
+DOWNLOAD_LAUNCHER: object = False
 
 # asdadsas
-def updateArgs(useArgs=None):
+def updateArgs(useArgs:list[str]|None=None):
   global OFFLINE, LAUNCHER_TO_LAUNCH, TRY_UPDATE, HEADLESS, VERSION, REGISTER_PROTOCOLS, DOWNLOAD_LAUNCHER
   (
-    OFFLINE,
-    LAUNCHER_TO_LAUNCH,
-    TRY_UPDATE,
-    HEADLESS,
-    VERSION,
-    REGISTER_PROTOCOLS,
-    DOWNLOAD_LAUNCHER,
+    OFFLINE, # pyright: ignore[reportConstantRedefinition]
+    LAUNCHER_TO_LAUNCH, # pyright: ignore[reportConstantRedefinition]
+    TRY_UPDATE, # pyright: ignore[reportConstantRedefinition]
+    HEADLESS, # pyright: ignore[reportConstantRedefinition]
+    VERSION, # pyright: ignore[reportConstantRedefinition]
+    REGISTER_PROTOCOLS, # pyright: ignore[reportConstantRedefinition]
+    DOWNLOAD_LAUNCHER, # pyright: ignore[reportConstantRedefinition]
   ) = checkArgs(
     *ALL_ARG_DATA,
     useArgs=useArgs,
@@ -306,14 +314,14 @@ def updateArgs(useArgs=None):
 updateArgs()
 
 
-from launcher.PROTO import PROTO
+from base.launcher.PROTO import PROTO
 
 
-def protoCalled(msg: str): # type: ignore
+def protoCalled(msg: str): # type: ignore # pyright: ignore[reportRedeclaration]
   msg: list[str] = msg.split("/")
   updateArgs(msg)
   global REGISTER_PROTOCOLS
-  REGISTER_PROTOCOLS = False
+  REGISTER_PROTOCOLS = False # pyright: ignore[reportConstantRedefinition]
   # match msg[0]:
   #   case "downloadLauncher":
   #     print(msg)
@@ -322,7 +330,7 @@ def protoCalled(msg: str): # type: ignore
 
 
 if PROTO.isSelf("multi-game-launcher") or REGISTER_PROTOCOLS: # type: ignore
-  PROTO.add("multi-game-launcher", protoCalled, True)
+  _=PROTO.add("multi-game-launcher", protoCalled, True)
 
 # print(HEADLESS)
 LOCAL_COLOR = Qt.GlobalColor.green
@@ -353,9 +361,9 @@ from typing import Type
 
 
 @dataclass
-class ItemListData:
+class listData:
   path: str | None
-  release: Dict[Any, Any] | None
+  release: dict[Any, Any] | None
   status: Statuses
   version: str
 
@@ -433,7 +441,7 @@ Args:
   """will set default state of setting replaceDuplicateGameFilesWithHardlinks which if true will scan all new version downloads and check to see if any files are the same between different versions and replace the new files with hardlinks instead"""
   CAN_USE_CENTRAL_GAME_DATA_FOLDER: bool = False
   """if true will make all game versions appear to be launched from a single dir else will just launch each one from a separate location"""
-  configs: Dict[Any, Any] | None = None
+  configs: dict[Any, Any] | None = None
   """if true will make all game versions appear to be launched from a single dir else will just launch each one from a separate location"""
   hadErrorLoading: bool = False
   errorText: str = ""
@@ -818,18 +826,18 @@ class Launcher(QWidget):
   def addVersionItem(
     self, version: str, status: Statuses, path=None, release=None, image_path=None
   ):
-    item = QListWidgetItem()
+    item = listWidgetItem()
 
     widget = VersionItemWidget("", MISSING_COLOR)
     widget.setModeKnownEnd()
 
     item.setSizeHint(widget.sizeHint())
-    self.versionList.addItem(item)
-    self.versionList.setItemWidget(item, widget)
+    self.list.addItem(item)
+    self.list.setItemWidget(item, widget)
 
     item.setData(
       Qt.ItemDataRole.UserRole,
-      ItemListData(
+      listData(
         version=version,
         status=status,
         path=path,
@@ -986,7 +994,7 @@ class Launcher(QWidget):
           print(f"Error processing {filename}: {e}")
 
   def onVersionDoubleClicked(self, item):
-    data: ItemListData = item.data(Qt.ItemDataRole.UserRole)
+    data: listData = item.data(Qt.ItemDataRole.UserRole)
     if not data:
       return
     match data.status:
@@ -1003,8 +1011,8 @@ class Launcher(QWidget):
       case Statuses.online:
         self.startQueuedDownloadRequest(data)
 
-  def startGameVersion(self, data: ItemListData):
-    args: List[str] = (
+  def startGameVersion(self, data: listData):
+    args: list[str] = (
       sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     )
 
@@ -1042,7 +1050,7 @@ class Launcher(QWidget):
     os.makedirs(gdl, exist_ok=True)
     return gdl
 
-  def startQueuedDownloadRequest(self, *versions: ItemListData):
+  def startQueuedDownloadRequest(self, *versions: listData):
     for data in versions:
       tag = data.version
       if tag in self.downloadingVersions:
@@ -1092,7 +1100,7 @@ class Launcher(QWidget):
       next_dl = self.downloadQueue.pop(0)
       self.startActualDownload(*next_dl)
     print(self.downloadingVersions)
-    self.updateVersionList()
+    self.list()
 
   def startActualDownload(self, tag, url, out_file, dest_dir):
     print(url, tag)
@@ -1140,7 +1148,7 @@ class Launcher(QWidget):
       self.config.onGameVersionDownloadComplete(path, tag)
       if VERSION and VERSION == tag:
         self.startGameVersion(
-          ItemListData(
+          listData(
             path=dest_dir, status=Statuses.local, version=tag, release={}
           )
         )
@@ -1159,8 +1167,8 @@ class Launcher(QWidget):
     widget.setProgress(percentage)
     widget.label.setText(f"Downloading {version_tag}... ({percentage}%)")
 
-  def updateVersionList(self):
-    if not self.versionList:
+  def list(self):
+    if not self.list:
       return
     if self.GAME_ID != "-":
       try:
@@ -1181,7 +1189,7 @@ class Launcher(QWidget):
         version = rel.get("tag_name")
         if version and version not in local_versions:
           all_items_data.append(
-            ItemListData(
+            listData(
               version=version,
               status=Statuses.gameSelector,
               path=rel.get("path"),
@@ -1196,7 +1204,7 @@ class Launcher(QWidget):
           if os.path.isdir(full_path) and self.config.gameVersionExists(
             full_path, self.settings, self.settings.selectedOs
           ):
-            thing = ItemListData(
+            thing = listData(
               version=dirname,
               status=Statuses.localOnly,
               path=full_path,
@@ -1213,7 +1221,7 @@ class Launcher(QWidget):
             version_map[version].release = rel
           else:
             all_items_data.append(
-              ItemListData(
+              listData(
                 version=version,
                 status=Statuses.online,
                 path=None,
@@ -1222,18 +1230,18 @@ class Launcher(QWidget):
             )
 
     sorted_data = self.sortVersions(all_items_data)
-    self.versionList.setUpdatesEnabled(False)
-    self.versionList.blockSignals(True)
+    self.list.setUpdatesEnabled(False)
+    self.list.blockSignals(True)
     try:
       self.activeItemRefs.clear()
-      current_count = self.versionList.count()
+      current_count = self.list.count()
       target_count = len(sorted_data)
       if current_count < target_count:
         for _ in range(target_count - current_count):
           self.addVersionItem(version="loading", status=Statuses.loadingInfo)
       elif current_count > target_count:
         for _ in range(current_count - target_count):
-          self.versionList.takeItem(self.versionList.count() - 1)
+          self.list.takeItem(self.list.count() - 1)
 
       if self.gameName is not None:
         if os.path.isfile(
@@ -1247,10 +1255,10 @@ class Launcher(QWidget):
             )
           )
       for i, data in enumerate(sorted_data):
-        assert isinstance(data, ItemListData)
-        item = self.versionList.item(i)
+        assert isinstance(data, listData)
+        item = self.list.item(i)
 
-        widget = self.versionList.itemWidget(item)
+        widget = self.list.itemWidget(item)
         self.activeItemRefs[data.version] = widget
         assert isinstance(widget, VersionItemWidget)
         if self.settings.showLauncherImages:
@@ -1311,11 +1319,11 @@ class Launcher(QWidget):
         item.setData(Qt.ItemDataRole.UserRole, data)
     except Exception as e:
       print(f"Update Error: {e}")
-    self.versionList.blockSignals(False)
-    self.versionList.setUpdatesEnabled(True)
+    self.list.blockSignals(False)
+    self.list.setUpdatesEnabled(True)
 
   def loadLocalVersions(self):
-    self.versionList.clear()
+    self.list.clear()
 
     if not os.path.isdir(self.VERSIONS_DIR):
       return
@@ -1381,9 +1389,9 @@ class Launcher(QWidget):
   def downloadAllVersions(self):
     onlineCount = 0
     items = []
-    for i in range(self.versionList.count()):
-      item = self.versionList.item(i)
-      data: ItemListData = item.data(Qt.ItemDataRole.UserRole)
+    for i in range(self.list.count()):
+      item = self.list.item(i)
+      data: listData = item.data(Qt.ItemDataRole.UserRole)
       if data and data.status == Statuses.online:
         version = data.version
         if version not in self.downloadingVersions:
@@ -1504,18 +1512,18 @@ class Launcher(QWidget):
       back_btn = self.newButton("<- Back to Selector", self.goBackToSelector)
       # Style it differently if you want (optional)
       main_layout.addWidget(back_btn)
-    self.versionList = QListWidget()
-    self.versionList.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-    self.versionList.customContextMenuRequested.connect(self.showContextMenu)
-    main_layout.addWidget(self.versionList)
+    self.list = listWidget()
+    self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+    self.list.customContextMenuRequested.connect(self.showContextMenu)
+    main_layout.addWidget(self.list)
     if OFFLINE:
       offline_label = QLabel("OFFLINE MODE")
       offline_label.setStyleSheet("color: orange; font-weight: bold;")
       main_layout.addWidget(offline_label)
 
-    self.versionList.itemDoubleClicked.connect(self.onVersionDoubleClicked)
+    self.list.itemDoubleClicked.connect(self.onVersionDoubleClicked)
 
-    main_layout.addWidget(self.versionList)
+    main_layout.addWidget(self.list)
 
     self.widgetsToSave = {}
 
@@ -1534,7 +1542,7 @@ class Launcher(QWidget):
       sd.LAUNCHER_ASSET_NAME = DOWNLOAD_LAUNCHER[3] # type: ignore
       self.updateSubLauncher(
         sd, # type: ignore
-        ItemListData(
+        listData(
           path=os.path.join(
             APP_DATA_PATH,
             DOWNLOAD_LAUNCHER[0] + ".py",
@@ -1554,7 +1562,7 @@ class Launcher(QWidget):
           lambda x: {"tag_name": x, "config": config.configs[x], "path": paths[x]}, config.configs # type: ignore
         )
       )
-      self.updateVersionList()
+      self.list()
       self.mainProgressBar.setModeDisabled()
       if not OFFLINE:
         if self.settings.checkForLauncherUpdatesWhenOpening:
@@ -1581,7 +1589,7 @@ class Launcher(QWidget):
         "[]",
       )
     )
-    self.updateVersionList()
+    self.list()
     if not OFFLINE:
       if self.settings.checkForLauncherUpdatesWhenOpening:
         if not launcherUpdateAlreadyChecked:
@@ -1597,9 +1605,9 @@ class Launcher(QWidget):
     else:
       self.mainProgressBar.setModeDisabled()
     if self.gameName and VERSION:
-      for i in range(self.versionList.count()):
-        item = self.versionList.item(i)
-        data: ItemListData = item.data(Qt.ItemDataRole.UserRole)
+      for i in range(self.list.count()):
+        item = self.list.item(i)
+        data: listData = item.data(Qt.ItemDataRole.UserRole)
         if not data:
           continue
         if data.version == VERSION:
@@ -1617,17 +1625,17 @@ class Launcher(QWidget):
     if result == QDialog.DialogCode.Accepted:
       print("Saving settings...")
       self.saveUserSettings()
-      self.updateVersionList()
+      self.list()
     else:
       print("Changes discarded. Reverting UI...")
       self.loadUserSettings()
 
   def showContextMenu(self, pos):
-    item = self.versionList.itemAt(pos)
+    item = self.list.itemAt(pos)
     if not item:
       return
 
-    data: ItemListData = item.data(Qt.ItemDataRole.UserRole)
+    data: listData = item.data(Qt.ItemDataRole.UserRole)
     menu = QMenu(self)
 
     def newAction(text: str, onclick: Callable):
@@ -1656,7 +1664,7 @@ class Launcher(QWidget):
       if data.path:
         newAction("Open Folder", lambda: self.openFile(data.path)) # type: ignore
         newAction(
-          f"Delete Version {data.version}", lambda: (shutil.rmtree(data.path), self.updateVersionList()) # type: ignore
+          f"Delete Version {data.version}", lambda: (shutil.rmtree(data.path), self.list()) # type: ignore
         )
       if data.release:
         newAction(
@@ -1666,7 +1674,7 @@ class Launcher(QWidget):
 
     menu.addSeparator()
     self.config.addContextMenuOptions(self, data, menu, newAction)
-    menu.exec(self.versionList.mapToGlobal(pos))
+    menu.exec(self.list.mapToGlobal(pos))
 
   def startFetch(self, max_pages=1, noDefaultConnections=False):
     """Standard fetch with a page limit."""
@@ -1715,13 +1723,13 @@ class Launcher(QWidget):
     self.mainProgressBar.label.setText(
       f"Fetching {total} Page{'' if total==1 else 's'}... {(page / total) * 100}% - {page} / {total}"
     )
-    self.updateVersionList()
+    self.list()
 
   def onReleaseFinished(self, releases):
     self.mainProgressBar.label.setText("")
     self.mainProgressBar.setModeDisabled()
     self.foundReleases = self.mergeReleases(self.foundReleases, releases)
-    self.updateVersionList()
+    self.list()
 
   def setupSettingsDialog(self):
     self.settingsDialog = QDialog(self)
@@ -1922,7 +1930,7 @@ class Launcher(QWidget):
   def updateSubLauncher(
     self,
     launcherSettings: Optional[Config] = None,
-    data: Optional[ItemListData] = None,
+    data: Optional[listData] = None,
     widget: Optional[VersionItemWidget] = None,
   ):
     ls = launcherSettings or self.config
@@ -1932,7 +1940,7 @@ class Launcher(QWidget):
     if data is None:
       # Assuming current running file is the target
       current_path = os.path.abspath(os.path.join(APP_DATA_PATH, sys.modules[self.gameName].__file__)) # type: ignore
-      data = ItemListData(
+      data = listData(
         version=self.gameName,
         path=current_path,
         release=None,
@@ -2012,7 +2020,7 @@ class Launcher(QWidget):
         self.activeDownloads.pop(tag, None)
         self.activeDownloads.pop(f"meta_{tag}", None)
         shutil.rmtree(dest_dir, ignore_errors=True)
-        self.updateVersionList()
+        self.list()
         if found["py"]:
           self.showRestartPrompt(f"{tag} updated successfully.")
 
@@ -2024,7 +2032,7 @@ class Launcher(QWidget):
   # def updateSubLauncher(
   #   self,
   #   launcherSettings: Optional[Config] = None,
-  #   data: Optional[ItemListData] = None,
+  #   data: Optional[listData] = None,
   #   widget: Optional[VersionItemWidget] = None,
   # ):
   #   """Refactored unified update logic for the launcher or sub-modules."""
@@ -2036,7 +2044,7 @@ class Launcher(QWidget):
   #   if data is None:
   #     # Assuming current running file is the target
   #     current_path = os.path.abspath(sys.modules[self.gameName].__file__) # type: ignore
-  #     data = ItemListData(
+  #     data = listData(
   #       version=self.gameName,
   #       path=current_path,
   #       release=None,
@@ -2131,7 +2139,7 @@ class Launcher(QWidget):
   #         self.activeDownloads.pop(tag, None)
   #         self.activeDownloads.pop(f"meta_{tag}", None)
   #         shutil.rmtree(dest_dir, ignore_errors=True)
-  #         self.updateVersionList()
+  #         self.list()
   #         if found["py"]:
   #           self.showRestartPrompt(f"{tag} updated successfully.")
 

@@ -36,7 +36,7 @@ class PROTO:
       with winreg.OpenKey(
         winreg.HKEY_CLASSES_ROOT, rf"{proto}\shell\open\command"
       ) as k:
-        return winreg.QueryValueEx(k, None)[0].lower() == PROTO._command().lower()  # type: ignore
+        return winreg.QueryValueEx(k, None)[0].lower() == PROTO._command().lower()  # type: ignore  # pyright: ignore[reportAny]
     except FileNotFoundError:
       return False
 
@@ -47,8 +47,9 @@ class PROTO:
   # ==================================================
   # Protocol handler registration
   # ==================================================
+
   @staticmethod
-  def add(proto: str, cb: Callable, force: int = 0) -> int:
+  def add(proto: str, cb: Callable[..., None], force: int = 0) -> int:
     proto = proto.lower()
 
     # ---------- Handle protocol invocation ----------
@@ -59,9 +60,9 @@ class PROTO:
       if scheme == proto:
         data = urllib.parse.unquote(payload)
         try:
-          cb(data, scheme)
+          _ = cb(data, scheme)
         except TypeError:
-          cb(data)
+          _ = cb(data)
     if PROTO.isSelf(proto):
       return True
     # ---------- Register handler ----------
@@ -98,7 +99,7 @@ class PROTO:
   def _exists_windows(proto: str) -> bool:
     winreg = _winreg()
     try:
-      winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, proto)
+      _ = winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, proto)
       return True
     except FileNotFoundError:
       return False
@@ -115,11 +116,11 @@ class PROTO:
     desktop = PROTO._desktop_path(proto)
     desktop.parent.mkdir(parents=True, exist_ok=True)
 
-    desktop.write_text(
+    _ = desktop.write_text(
       f"""\n[Desktop Entry]\nName={proto} handler\nExec={sys.executable} {os.path.abspath(sys.argv[0])} %u\nType=Application\nTerminal=false\nMimeType=x-scheme-handler/{proto};"""
     )
 
-    subprocess.run(
+    _ = subprocess.run(
       ["xdg-mime", "default", desktop.name, f"x-scheme-handler/{proto}"],
       check=True,
     )
