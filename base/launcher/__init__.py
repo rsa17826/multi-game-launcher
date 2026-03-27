@@ -259,7 +259,7 @@ def updateArgs(useArgs=None):
 updateArgs()
 
 
-from PROTO import PROTO
+from launcher.PROTO import PROTO
 
 
 def protoCalled(msg: str): # type: ignore
