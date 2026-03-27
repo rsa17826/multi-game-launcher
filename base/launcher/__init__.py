@@ -200,6 +200,7 @@ def get_app_data_path():
 
 
 APP_DATA_PATH = get_app_data_path()
+os.makedirs(APP_DATA_PATH, exist_ok=True)
 
 ALL_ARG_DATA = (
   ArgumentData(key="offline", afterCount=0),
