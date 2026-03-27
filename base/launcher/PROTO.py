@@ -17,7 +17,7 @@ def _winreg():
 
 # TODO test on linux
 class PROTO:
-  errorOnAddFailure = True
+  errorOnAddFailure: bool = True
 
   # ==================================================
   # Runtime helpers (AHK-style)
@@ -36,7 +36,7 @@ class PROTO:
       with winreg.OpenKey(
         winreg.HKEY_CLASSES_ROOT, rf"{proto}\shell\open\command"
       ) as k:
-        return winreg.QueryValueEx(k, None)[0].lower() == PROTO._command().lower()  # type: ignore  # pyright: ignore[reportAny]
+        return winreg.QueryValueEx(k, None)[0].lower() == PROTO._command().lower()  # type: ignore  # pyright: ignore[reportAny, reportArgumentType]
     except FileNotFoundError:
       return False
 

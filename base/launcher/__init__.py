@@ -286,6 +286,7 @@ def buildArgs(*argData: ArgumentData, useArgs: list[str]) -> list[str]:
 
   return result_args
 
+
 OFFLINE: object = False
 LAUNCHER_TO_LAUNCH: object = None
 TRY_UPDATE: object = False
@@ -294,8 +295,9 @@ VERSION: object = None
 REGISTER_PROTOCOLS: object = False
 DOWNLOAD_LAUNCHER: object = False
 
+
 # asdadsas
-def updateArgs(useArgs:list[str]|None=None):
+def updateArgs(useArgs: list[str] | None = None):
   global OFFLINE, LAUNCHER_TO_LAUNCH, TRY_UPDATE, HEADLESS, VERSION, REGISTER_PROTOCOLS, DOWNLOAD_LAUNCHER
   (
     OFFLINE, # pyright: ignore[reportConstantRedefinition]
@@ -330,7 +332,7 @@ def protoCalled(msg: str): # type: ignore # pyright: ignore[reportRedeclaration]
 
 
 if PROTO.isSelf("multi-game-launcher") or REGISTER_PROTOCOLS: # type: ignore
-  _=PROTO.add("multi-game-launcher", protoCalled, True)
+  _ = PROTO.add("multi-game-launcher", protoCalled, True)
 
 # print(HEADLESS)
 LOCAL_COLOR = Qt.GlobalColor.green
@@ -370,7 +372,7 @@ class listData:
 
 @dataclass
 class Config:
-  supportedOs: Type[Enum]
+  supportedOs: type[Enum]
   GH_USERNAME: str
   """github username eg rsa17826"""
   GH_REPO: str
@@ -381,14 +383,14 @@ class Config:
   """github repo name for launcher updates - only set if launcher updates should use a separate repo"""
   LAUNCHER_ASSET_NAME: str = ""
   """Identifies which file to download from the GitHub Release assets for updating the launcher"""
-  getImage: Callable = lambda *a: ""
+  getImage: Callable[..., str] = lambda *a: ""
   """
 returns the path to the image that should be shown
 
 Args:
   version: the game version or the name of the python file.
 """
-  addContextMenuOptions: Callable = lambda *a: None
+  addContextMenuOptions: Callable[..., None] = lambda *a: None
   """
 Injects custom actions into the right-click menu of a version item.
 
@@ -397,8 +399,8 @@ Args:
   menu: The QMenu object being constructed.
   data: The metadata dictionary of the selected version (version, status, path, etc.).
 """
-  getGameLogLocation: Callable = lambda *a: ""
-  gameLaunchRequested: Callable = lambda *a: None
+  getGameLogLocation: Callable[..., str] = lambda *a: ""
+  gameLaunchRequested: Callable[..., None] = lambda *a: None
   """
 Handles the execution of the game binary when the user double-clicks a version.
 
@@ -407,15 +409,15 @@ Args:
   args (list[str]): Base command-line arguments provided by the launcher.
   settings: The current settings object containing user-defined flags.
 """
-  getAssetName: Callable = lambda *a: ""
+  getAssetName: Callable[..., str] = lambda *a: ""
   """Identifies which file to download from the GitHub Release assets.
 Args:
   settings (launcher.SettingsData): The current settings object containing user-defined flags
 Returns:
   str: the name of the asset to download from gh
 """
-  onGameVersionDownloadComplete: Callable = lambda *a: None
-  gameVersionExists: Callable = lambda *a: False
+  onGameVersionDownloadComplete: Callable[..., None] = lambda *a: None
+  gameVersionExists: Callable[..., bool] = lambda *a: False
   """
 Validation check to see if a folder contains a valid installation.
 Used by the launcher to decide if a version is 'Local' (Run) or 'Online' (Download).
@@ -427,7 +429,7 @@ Args:
 Returns:
   bool: return true if the path has a game in it
 """
-  addCustomNodes: Callable = lambda *a: None
+  addCustomNodes: Callable[..., None] = lambda *a: None
   """
 Injects custom UI elements into the 'Local Settings' section of the Launcher.
 
@@ -441,7 +443,7 @@ Args:
   """will set default state of setting replaceDuplicateGameFilesWithHardlinks which if true will scan all new version downloads and check to see if any files are the same between different versions and replace the new files with hardlinks instead"""
   CAN_USE_CENTRAL_GAME_DATA_FOLDER: bool = False
   """if true will make all game versions appear to be launched from a single dir else will just launch each one from a separate location"""
-  configs: dict[Any, Any] | None = None
+  configs: dict[object, object] | None = None
   """if true will make all game versions appear to be launched from a single dir else will just launch each one from a separate location"""
   hadErrorLoading: bool = False
   errorText: str = ""
@@ -450,17 +452,17 @@ Args:
 class f:
   @staticmethod
   def read(
-    file,
-    default="",
-    asbinary=False,
+    file: int | str | bytes | os.PathLike[str] | os.PathLike[bytes],
+    default: str = "",
+    asbinary: bool = False,
     buffering: int = -1,
     encoding: str | None = None,
     errors: str | None = None,
     newline: str | None = None,
     closefd: bool = True,
-    opener=None,
+    opener: Callable[[str, int], int] | None = None,
   ):
-    if Path(file).exists():
+    if os.path.exists(file):
       with open(
         file,
         "r" + ("b" if asbinary else ""),
@@ -471,7 +473,7 @@ class f:
         closefd=closefd,
         opener=opener,
       ) as f:
-        text = f.read()
+        text: str | bytes | None = f.read() # pyright: ignore[reportAny]
       if text:
         return text
       return default
@@ -486,21 +488,21 @@ class f:
         closefd=closefd,
         opener=opener,
       ) as f:
-        f.write(default)
+        _ = f.write(default)
       return default
 
   @staticmethod
   def write(
-    file,
-    text,
-    asbinary=False,
+    file: int | str | bytes | os.PathLike[str] | os.PathLike[bytes],
+    text:str|bytes,
+    asbinary: bool = False,
     buffering: int = -1,
     encoding: str | None = None,
     errors: str | None = None,
     newline: str | None = None,
     closefd: bool = True,
-    opener=None,
-  ):
+    opener: Callable[[str, int], int] | None = None,
+  ) -> str | bytes:
     with open(
       file,
       "w" + ("b" if asbinary else ""),
@@ -511,7 +513,7 @@ class f:
       closefd=closefd,
       opener=opener,
     ) as f:
-      f.write(text)
+      _=f.write(text)
     return text
 
 
