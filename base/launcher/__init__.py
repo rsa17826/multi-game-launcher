@@ -2,8 +2,8 @@
 # @regex (?<=[^\s])  #
 # @replace  #
 # @endregex
+from __future__ import annotations
 from _hashlib import HASH
-from ast import TypeAlias
 from inspect import FrameInfo
 from os import stat_result
 from re import Match
@@ -386,7 +386,6 @@ class Statuses(Enum):
 # downloading = 2
 # waitingForDownload = 3
 
-
 @dataclass
 class listData:
   path: str | None
@@ -468,7 +467,7 @@ Args:
   """will set default state of setting replaceDuplicateGameFilesWithHardlinks which if true will scan all new version downloads and check to see if object files are the same between different versions and replace the new files with hardlinks instead"""
   CAN_USE_CENTRAL_GAME_DATA_FOLDER: bool = False
   """if true will make all game versions appear to be launched from a single dir else will just launch each one from a separate location"""
-  configs: dict[str, Config] | None = None # pyright: ignore[reportUndefinedVariable]
+  configs: dict[str, Config] | None = None
   """if true will make all game versions appear to be launched from a single dir else will just launch each one from a separate location"""
   hadErrorLoading: bool = False
   errorText: str = ""
@@ -773,15 +772,15 @@ class VersionItemWidget(QWidget):
       QTimer.singleShot(16, self.update)
 
     if self.progressType == self.ProgressTypes.both:
-      fill_end: float = (
+      fill_end: float = ( # pyright: ignore[reportRedeclaration]
         w * self.progress / 100
-      ) # pyright: ignore[reportRedeclaration]
-      solid_rect: QRectF = QRectF(
+      )
+      solid_rect: QRectF = QRectF( # pyright: ignore[reportRedeclaration]
         0, 0, max(0, fill_end - gradSize), h
-      ) # pyright: ignore[reportRedeclaration]
-      tip_rect: QRectF = QRectF(
+      )
+      tip_rect: QRectF = QRectF( # pyright: ignore[reportRedeclaration]
         solid_rect.right(), 0, int(min(gradSize, fill_end)), h
-      ) # pyright: ignore[reportRedeclaration]
+      )
       self._drawProgress(painter, solid_rect, minGradAlpha)
       self._drawGradient(
         painter,
@@ -790,7 +789,7 @@ class VersionItemWidget(QWidget):
         tip_rect.topRight(),
         minGradAlpha,
       )
-      fill_start = w - (w * (100 - self.progress) / 100)
+      fill_start: float = w - (w * (100 - self.progress) / 100)
       solid_rect = QRectF(
         int(fill_start + gradSize), 0, w - int(fill_start + gradSize), h
       )
@@ -971,9 +970,12 @@ class Launcher(QWidget):
       elif isinstance(widget, QSpinBox):
         value = widget.value()
       elif isinstance(widget, EnumComboBox):
-        value = widget.currentData()
-        if widget.usesEnum: # type: ignore
-          value = value.value
+        data: object = cast(object, widget.currentData())
+        if widget.usesEnum:
+          value = cast(object, cast(Enum, data).value)
+        else:
+          value = data
+
       else:
         continue
 
@@ -1026,17 +1028,15 @@ class Launcher(QWidget):
           elif isinstance(widget, QCheckBox):
             widget.setChecked(bool(value))
           elif isinstance(widget, QSpinBox):
-            widget.setValue(int(value))
+            widget.setValue(int(cast(int, value)))
           elif isinstance(widget, QComboBox):
-            # don't error when node has only one index - might be useful
             try:
-              # try to make sure that the change event is sent as setCurrentIndex donesnt send it if current index is same
               idx: int = widget.currentIndex()
-              if idx == value:
+              if idx == cast(int, value):
                 widget.setCurrentIndex(1 if idx == 0 else 0)
             except:
               pass
-            widget.setCurrentIndex(value)
+            widget.setCurrentIndex(cast(int, value))
       except Exception as e:
         print("error loading value for ", key, e)
 
@@ -1484,9 +1484,9 @@ class Launcher(QWidget):
         print("failed reading lastRanVersion", e)
 
     def getSortKey(
-      item,
+      item: listData,
     ) -> tuple[
-      Literal[1, 0], Literal[1, 0], Literal[1, 0], Literal[1, 0], int | Any
+      Literal[1, 0], Literal[1, 0], Literal[1, 0], Literal[1, 0], int | str
     ]:
       version = item.version
       status = item.status
@@ -1521,14 +1521,15 @@ class Launcher(QWidget):
 
   def downloadAllVersions(self) -> None:
     onlineCount = 0
-    items: list[Any] = []
+    items: list[listData] = []
     for i in range(self.listWidget.count()):
-      item: Any = self.listWidget.item(i)
-      data: listData = item.data(Qt.ItemDataRole.UserRole)
+      item: QListWidgetItem = self.listWidget.item(i)
+      data: listData = cast(listData, item.data(Qt.ItemDataRole.UserRole))
+      assert isinstance(data, listData)
       if data and data.status == Statuses.online:
-        version: Any | str = data.version
+        version: str = data.version
         if version not in self.downloadingVersions:
-          items.append(item.data(Qt.ItemDataRole.UserRole))
+          items.append(cast(listData, item.data(Qt.ItemDataRole.UserRole)))
           onlineCount += 1
     self.startQueuedDownloadRequest(*items)
 
@@ -1542,18 +1543,22 @@ class Launcher(QWidget):
     onfinished: Signal = Signal(list)
     error: Signal = Signal(str)
 
-    def __init__(self, API_URL, pat=None, max_pages=1) -> None:
+    def __init__(
+      self, API_URL: str, pat: str | None = None, max_pages: int = 1
+    ) -> None:
       super().__init__()
-      self.pat: Any | None = pat
-      self.maxPages = max_pages
-      self.API_URL = API_URL
+      self.pat: str | None | None = pat
+      self.maxPages: int = max_pages
+      self.API_URL: str = API_URL
 
+    @override
     def run(self) -> None:
       if OFFLINE:
         self.onfinished.emit([])
         return
       try:
-        releases: list[Any] = []
+        final_size = -1
+        releases: list[str] = []
         headers: dict[str, str] = (
           {"Authorization": f"token {self.pat}"} if self.pat else {}
         )
@@ -1586,7 +1591,7 @@ class Launcher(QWidget):
           )
           if r.status_code != 200:
             break
-          data = r.json()
+          data: list[Any] = r.json()
           if not data:
             break
 
@@ -1621,7 +1626,7 @@ class Launcher(QWidget):
     self.setWindowTitle(config.WINDOW_TITLE)
     self.setFixedSize(420, 600)
     self.setStyleSheet(
-      cast(str, f.read(os.path.join(LAUNCHER_START_PATH, "main.css")))
+      f.read(os.path.join(LAUNCHER_START_PATH, "main.css"))
     )
     self.GAME_ID: str = re.sub(
       r"_{2,}",
@@ -1664,7 +1669,7 @@ class Launcher(QWidget):
 
     main_layout.addWidget(self.listWidget)
 
-    self.widgetsToSave: dict[Any, Any] = {}
+    self.widgetsToSave: dict[str,QWidget] = {}
 
     self.mainProgressBar: VersionItemWidget = VersionItemWidget("", MISSING_COLOR)
     main_layout.addWidget(self.mainProgressBar)
@@ -2071,9 +2076,9 @@ class Launcher(QWidget):
 
   def updateSubLauncher(
     self,
-    launcherSettings: Optional[Config] = None,
-    data: Optional[listData] = None,
-    widget: Optional[VersionItemWidget] = None,
+    launcherSettings: Config|None = None,
+    data: listData|None = None,
+    widget: VersionItemWidget|None = None,
   ) -> None:
     ls: Config = launcherSettings or self.config
 
@@ -2081,21 +2086,21 @@ class Launcher(QWidget):
     # create a mock one or find the one matching the current game
     if data is None:
       # Assuming current running file is the target
-      current_path: Any = os.path.abspath(os.path.join(APP_DATA_PATH, sys.modules[self.gameName].__file__)) # type: ignore
-      data: listData = listData(
+      current_path: str = os.path.abspath(os.path.join(APP_DATA_PATH, sys.modules[self.gameName].__file__)) # type: ignore
+      data = listData(
         version=self.gameName,
         path=current_path,
         release=None,
         status=Statuses.gameSelector,
       )
-
+    assert isinstance(data, listData)
     tag: str = data.version
     if not widget:
-      widget: VersionItemWidget | None = self.activeItemRefs.get(tag)
+      widget = self.activeItemRefs.get(tag)
     assert isinstance(widget, VersionItemWidget)
     widget.setModeKnownEnd()
 
-    def on_progress(progress) -> None:
+    def on_progress(progress:float) -> None:
       widget.setProgress(progress)
 
     self.downloadingVersions.append(tag)
@@ -2111,7 +2116,7 @@ class Launcher(QWidget):
     )
     self.activeDownloads[tag] = dl_thread
 
-    def on_finished(path) -> None:
+    def on_finished(path:str) -> None:
       widget.setModeDisabled()
       found: dict[str, bool] = {"py": False, "png": False}
       extracted = False
@@ -2141,7 +2146,7 @@ class Launcher(QWidget):
                 )
                 if os.path.exists(imgpath):
                   os.remove(imgpath)
-                shutil.move(
+                _ = shutil.move(
                   os.path.join(root, f"{tag}.png"),
                   imgpath,
                 )
@@ -2150,7 +2155,7 @@ class Launcher(QWidget):
               if data.path:
                 if os.path.exists(data.path):
                   os.remove(data.path)
-                shutil.move(os.path.join(root, f"{tag}.py"), data.path)
+                _ = shutil.move(os.path.join(root, f"{tag}.py"), data.path)
                 found["py"] = True
             if found["png"] and found["py"]:
               break
@@ -2159,16 +2164,16 @@ class Launcher(QWidget):
       finally:
         if tag in self.downloadingVersions:
           self.downloadingVersions.remove(tag)
-        self.activeDownloads.pop(tag, None)
-        self.activeDownloads.pop(f"meta_{tag}", None)
+        _ = self.activeDownloads.pop(tag, None)
+        _ = self.activeDownloads.pop(f"meta_{tag}", None)
         shutil.rmtree(dest_dir, ignore_errors=True)
         self.populateList()
         if found["py"]:
           self.showRestartPrompt(f"{tag} updated successfully.")
 
-    dl_thread.progress.connect(on_progress)
-    dl_thread.onfinished.connect(on_finished)
-    dl_thread.onfinished.connect(dl_thread.deleteLater)
+    _ = dl_thread.progress.connect(on_progress)
+    _ = dl_thread.onfinished.connect(on_finished)
+    _ = dl_thread.onfinished.connect(dl_thread.deleteLater)
     dl_thread.start()
 
   # def updateSubLauncher(
