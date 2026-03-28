@@ -1195,11 +1195,12 @@ class Launcher(QWidget):
       self.downloadingVersions.append(tag)
       release: ReleaseType | None = data.release
       assert release is not None
+      # print(release.get("assets", []), self.config.getAssetName(self.settings, self.settings.selectedOs))
       asset: AssetType | None = next(
         (
           a
           for a in cast(list[AssetType], release.get("assets", []))
-          if a["name"]
+          if (a.get("label") or a["name"])
           == self.config.getAssetName(self.settings, self.settings.selectedOs)
         ),
         None,
@@ -1283,7 +1284,7 @@ class Launcher(QWidget):
         self.processDownloadQueue()
       else:
         _ = self.activeDownloads.pop(tag, None)
-      self.config.onGameVersionDownloadComplete(path, tag)
+      self.config.onGameVersionDownloadComplete(path, tag, self.settings.selectedOs)
       if VERSION and VERSION == tag:
         self.startGameVersion(
           listData(
@@ -2631,3 +2632,4 @@ if __name__ == "__main__":
 
 # TODO make del on launcher selector update ui
 # TODO add settying in app to register proto
+# TODO make main progress bar show total dl progress of all current dls
