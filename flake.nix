@@ -31,6 +31,7 @@
           requests
           texttable
           urllib3
+          typing-extensions
         ];
 
         launcher = ps.buildPythonApplication {
@@ -41,7 +42,15 @@
 
           format = "pyproject";
           build-system = [ ps.setuptools ];
-
+          postPatch = ''
+              python3 -c "
+            import re, pathlib
+            p = pathlib.Path('pyproject.toml')
+            content = p.read_text()
+            new = re.sub(r'dependencies = \[.*?\]', 'dependencies = []', content, flags=re.DOTALL)
+            p.write_text(new)
+            "
+          '';
           propagatedBuildInputs = pythonDeps;
 
           meta = {
@@ -59,11 +68,6 @@
 
         devShells.default = pkgs.mkShell {
           buildInputs = [ (python.withPackages (_: pythonDeps)) ];
-
-          # This creates a symlink so VS Code/Zuban finds the packages
-          shellHook = ''
-            ln -sfT $(python -c "import sys; print(sys.prefix)") .venv
-          '';
         };
 
         apps.default = {
