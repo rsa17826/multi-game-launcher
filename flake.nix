@@ -31,8 +31,6 @@
           requests
           texttable
           urllib3
-          types-requests # Add this for Zuban/Pyright
-          typing-extensions # Add this for Zuban/Pyright
         ];
 
         launcher = ps.buildPythonApplication {

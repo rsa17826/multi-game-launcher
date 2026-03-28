@@ -1,6 +1,5 @@
 **/logs
 **/.venv
-**/*.json
 **/versions
 **/launcherData
 **/rsa17826*
