@@ -71,6 +71,17 @@ from typing_extensions import override # pyright: ignore[reportMissingModuleSour
 from collections.abc import Iterator
 
 type ReleaseType = dict[str, object]
+from typing import TypedDict
+
+class AssetType(TypedDict):
+    name: str
+    url: str
+    browser_download_url: str
+class AssetTypeOptional(AssetType, total=False):
+    size: int
+    content_type: str
+
+
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 
 
@@ -962,7 +973,7 @@ class Launcher(QWidget):
     local_data: dict[str, object] = {}
     global_data: dict[str, object] = {}
 
-    for key, widget in cast(dict[str, QWidget], self.widgetsToSave).items():
+    for key, widget in self.widgetsToSave.items():
       if isinstance(widget, QLineEdit):
         value = widget.text()
       elif isinstance(widget, QCheckBox):
@@ -1180,14 +1191,14 @@ class Launcher(QWidget):
       self.downloadingVersions.append(tag)
       release: ReleaseType | None = data.release
       assert release is not None
-      asset: dict[str, object] | None = next(
-        (
-          a
-          for a in release.get("assets", [])
-          if a["name"]
-          == self.config.getAssetName(self.settings, self.settings.selectedOs)
-        ),
-        None,
+      asset: AssetType | None = next(
+          (
+              a
+              for a in cast(list[AssetType], release.get("assets", []))
+              if a["name"]
+              == self.config.getAssetName(self.settings, self.settings.selectedOs)
+          ),
+          None,
       )
 
       if not asset:
@@ -1279,9 +1290,9 @@ class Launcher(QWidget):
     _ = dl_thread.progress.connect(bind[None](self.handleDownloadProgress, tag))
     _ = dl_thread.onfinished.connect(onFinished)
     _ = dl_thread.error.connect(
-      lambda e: print(
+      lambda e: print(# pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
         f"DL Error {tag}: {e}"
-      ) # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
+      ) 
     )
 
     _ = dl_thread.onfinished.connect(dl_thread.deleteLater)
@@ -1356,19 +1367,19 @@ class Launcher(QWidget):
               )
             )
 
-    sorted_data: list[Any] = self.sortVersions(all_items_data)
+    sorted_data: list[listData] = self.sortVersions(all_items_data)
     self.listWidget.setUpdatesEnabled(False)
-    self.listWidget.blockSignals(True)
+    _ = self.listWidget.blockSignals(True)
     try:
       self.activeItemRefs.clear()
-      current_count: Any = self.listWidget.count()
+      current_count: int = self.listWidget.count()
       target_count: int = len(sorted_data)
       if current_count < target_count:
         for _ in range(target_count - current_count):
           self.addVersionItem(version="loading", status=Statuses.loadingInfo)
       elif current_count > target_count:
         for _ in range(current_count - target_count):
-          self.listWidget.takeItem(self.listWidget.count() - 1)
+          _ = self.listWidget.takeItem(self.listWidget.count() - 1)
 
       if self.gameName is not None:
         if os.path.isfile(
@@ -1385,7 +1396,7 @@ class Launcher(QWidget):
         assert isinstance(data, listData)
         item: QListWidgetItem = self.listWidget.item(i)
 
-        widget: QWidget = self.listWidget.itemWidget(item)
+        widget: VersionItemWidget = cast(VersionItemWidget, self.listWidget.itemWidget(item))
         self.activeItemRefs[data.version] = widget
         assert isinstance(widget, VersionItemWidget)
         if self.settings.showLauncherImages:
@@ -1394,10 +1405,10 @@ class Launcher(QWidget):
           #   widget.setIcon(data.release["config"].getImage(data.version))
           # else:
           #   widget.setIcon(self.config.getImage(data.version))
-          imagePath: None = None
+          imagePath: str|None = None
           if data.status == Statuses.gameSelector:
             assert data.release is not None
-            imagePath: None = os.path.join(
+            imagePath = os.path.join(
               APP_DATA_PATH, "images/" + data.version + ".png"
             )
             print(imagePath)
@@ -1412,6 +1423,7 @@ class Launcher(QWidget):
         else:
           widget.setModeDisabled()
           match data.status:
+            case Statuses.loadingInfo:pass
             case Statuses.gameSelector:
               assert self.config.configs is not None
               if self.config.configs[data.version].hadErrorLoading:
@@ -1446,7 +1458,7 @@ class Launcher(QWidget):
         item.setData(Qt.ItemDataRole.UserRole, data)
     except Exception as e:
       print(f"Update Error: {e}")
-    self.listWidget.blockSignals(False)
+    _ = self.listWidget.blockSignals(False)
     self.listWidget.setUpdatesEnabled(True)
 
   def loadLocalVersions(self):
@@ -1469,7 +1481,7 @@ class Launcher(QWidget):
         version=dirname, status=Statuses.localOnly, path=full_path
       )
 
-  def sortVersions(self, versions_data: list[listData]) -> Any:
+  def sortVersions(self, versions_data: list[listData]) -> list[listData]:
     versionThatWasLastRan: str | None = None
     if self.GAME_ID != "-":
       try:
@@ -1591,7 +1603,7 @@ class Launcher(QWidget):
           )
           if r.status_code != 200:
             break
-          data: list[Any] = r.json()
+          data: list[str]|None =cast(list[str]|None, r.json())
           if not data:
             break
 
@@ -1686,7 +1698,7 @@ class Launcher(QWidget):
       sd.LAUNCHER_GH_REPO = DOWNLOAD_LAUNCHER[2] # type: ignore # pyright: ignore[reportAttributeAccessIssue]
       sd.LAUNCHER_ASSET_NAME = DOWNLOAD_LAUNCHER[3] # type: ignore # pyright: ignore[reportAttributeAccessIssue]
       self.updateSubLauncher(
-        sd, # type: ignore
+        sd, # type: ignore # pyright: ignore[reportArgumentType]
         listData(
           path=os.path.join(
             APP_DATA_PATH,
@@ -1702,9 +1714,9 @@ class Launcher(QWidget):
 
     if self.config.configs is not None:
       self.VERSIONS_DIR = "///" # pyright: ignore[reportConstantRedefinition]
-      self.foundReleases: list[dict[str, Any]] = list[dict[str, Any]](
-        map[dict[str, Any]](
-          lambda x: {"tag_name": x, "config": config.configs[x], "path": paths[x]}, config.configs # type: ignore
+      self.foundReleases: list[dict[str, object]] = list[dict[str, object]](
+        map[dict[str, object]](
+          lambda x: {"tag_name": x, "config": self.config.configs[x], "path": paths[x]}, self.config.configs # pyright: ignore[reportOptionalSubscript]
         )
       )
       self.populateList()
@@ -1743,9 +1755,10 @@ class Launcher(QWidget):
           self.updateLauncher()
         launcherUpdateAlreadyChecked = True
     if not OFFLINE and self.settings.fetchOnLoad:
-      self.startFetch(max_pages=self.settings.maxPagesOnLoad)
+      self.startFetch(max_pages=cast(int, self.settings.maxPagesOnLoad))
+      assert self.releaseFetchingThread is not None
       self.releaseFetchingThread.error.connect(
-        lambda e: print("Release fetch error:", e)
+        lambda e: print("Release fetch error:", e) # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
       )
       self.releaseFetchingThread.start()
       self.mainProgressBar.show()
@@ -1753,8 +1766,8 @@ class Launcher(QWidget):
       self.mainProgressBar.setModeDisabled()
     if self.gameName and VERSION:
       for i in range(self.listWidget.count()):
-        item: Any = self.listWidget.item(i)
-        data: listData = item.data(Qt.ItemDataRole.UserRole)
+        item: QListWidgetItem = self.listWidget.item(i)
+        data: listData|None = cast(listData|None, item.data(Qt.ItemDataRole.UserRole))
         if not data:
           continue
         if data.version == VERSION:
@@ -1778,23 +1791,23 @@ class Launcher(QWidget):
       self.loadUserSettings()
 
   def showContextMenu(self, pos: QPoint) -> None:
-    item: Any = self.listWidget.itemAt(pos)
+    item: QListWidgetItem | None = cast(QListWidgetItem | None, self.listWidget.itemAt(pos))
     if not item:
       return
 
-    data: listData = item.data(Qt.ItemDataRole.UserRole)
+    data: listData = cast(listData, item.data(Qt.ItemDataRole.UserRole))
     menu: QMenu = QMenu(self)
 
-    def newAction(text: str, onclick: Callable) -> None:
+    def newAction(text: str, onclick: Callable[[], object]) -> None:
       run_action: QAction = menu.addAction(text)
-      run_action.triggered.connect(onclick)
+      _ = run_action.triggered.connect(onclick)
 
     print(data.status)
     if data.status == Statuses.gameSelector:
       if self.config.configs is not None:
         print(self.config.configs[data.version].LAUNCHER_ASSET_NAME)
         if self.config.configs[data.version].LAUNCHER_ASSET_NAME:
-          menu.addAction(
+          _ = menu.addAction(
             "Update",
             bind[None](
               self.updateSubLauncher,
@@ -1803,15 +1816,17 @@ class Launcher(QWidget):
             ),
           )
       if data.path:
-        newAction("Open Folder", lambda: self.openFile(os.path.dirname(data.path))) # type: ignore
+        path:str=data.path # pyright: ignore[reportRedeclaration]
+        newAction("Open Folder", lambda: self.openFile(os.path.dirname(path)))
         newAction(
-          f"Delete {data.version} Launcher", lambda: os.remove(data.path) # type: ignore
+          f"Delete {data.version} Launcher", lambda: os.remove(path)
         )
     else:
       if data.path:
-        newAction("Open Folder", lambda: self.openFile(data.path)) # type: ignore
+        path:str=data.path
+        newAction("Open Folder", lambda: self.openFile(path))
         newAction(
-          f"Delete Version {data.version}", lambda: (shutil.rmtree(data.path), self.populateList()) # type: ignore
+          f"Delete Version {data.version}", lambda: (shutil.rmtree(path), self.populateList())
         )
       if data.release:
         newAction(
@@ -1829,7 +1844,7 @@ class Launcher(QWidget):
       return
 
     self.releaseFetchingThread = self.ReleaseFetchThread(
-      self.API_URL, pat=self.settings.githubPat or None, max_pages=max_pages
+      self.API_URL, pat=cast(str, self.settings.githubPat) or None, max_pages=max_pages
     )
     if max_pages:
       self.mainProgressBar.setModeKnownEnd()
@@ -1843,27 +1858,27 @@ class Launcher(QWidget):
     else:
       self.mainProgressBar.label.setText(f"Fetching Page Count...")
     if not noDefaultConnections:
-      self.releaseFetchingThread.progress.connect(self.onReleaseProgress)
-      self.releaseFetchingThread.finished.connect(self.onReleaseFinished)
+      _ = self.releaseFetchingThread.progress.connect(self.onReleaseProgress)
+      _ = self.releaseFetchingThread.finished.connect(self.onReleaseFinished)
     self.releaseFetchingThread.start()
 
-  def mergeReleases(self, existing, new_data) -> list[Any]:
+  def mergeReleases(self, existing:list[ReleaseType], new_data:list[ReleaseType]) -> list[ReleaseType]:
 
-    merged: dict[Any, Any] = {rel["tag_name"]: rel for rel in existing}
+    merged: dict[str, ReleaseType] = {cast(str, rel["tag_name"]): rel for rel in existing}
 
     for rel in new_data:
-      tag: Any = rel.get("tag_name")
+      tag: str|None = cast(str|None,rel.get("tag_name"))
       if tag:
         merged[tag] = rel
 
-    return list[Any](merged.values())
+    return list[ReleaseType](merged.values())
 
   def startFullFetch(self) -> None:
     """Triggered by button to fetch everything."""
     print("Starting Full Release Fetch...")
     self.startFetch(max_pages=0)
 
-  def onReleaseProgress(self, page, total, releases) -> None:
+  def onReleaseProgress(self, page:int, total:int, releases:list[ReleaseType]) -> None:
     self.mainProgressBar.setModeKnownEnd()
     self.mainProgressBar.setProgress((page / total) * 100)
     self.foundReleases = self.mergeReleases(self.foundReleases, releases)
@@ -1872,7 +1887,7 @@ class Launcher(QWidget):
     )
     self.populateList()
 
-  def onReleaseFinished(self, releases) -> None:
+  def onReleaseFinished(self, releases:list[ReleaseType]) -> None:
     self.mainProgressBar.label.setText("")
     self.mainProgressBar.setModeDisabled()
     self.foundReleases = self.mergeReleases(self.foundReleases, releases)
@@ -1902,7 +1917,7 @@ class Launcher(QWidget):
       )
     )
 
-    def toggleAlwaysOnTop(win: Launcher, on) -> None:
+    def toggleAlwaysOnTop(win: Launcher, on:bool) -> None:
       win.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, on)
       win.show()
 
@@ -1931,8 +1946,8 @@ class Launcher(QWidget):
     outerLayout.addWidget(groupBox)
     # endregion
     # region global
-    groupBox: QGroupBox = QGroupBox("Global Settings (All Games)")
-    groupLayout: QVBoxLayout = QVBoxLayout()
+    groupBox= QGroupBox("Global Settings (All Games)")
+    groupLayout = QVBoxLayout()
 
     groupLayout.addWidget(
       self.newCheckbox(
@@ -1990,10 +2005,10 @@ class Launcher(QWidget):
     outerLayout.addWidget(groupBox)
     # endregion
     # region local
-    groupBox: QGroupBox = QGroupBox(
+    groupBox = QGroupBox(
       f"Local Settings ({self.gameName or "Default Settings For New Launchers"})"
     )
-    groupLayout: QVBoxLayout = QVBoxLayout()
+    groupLayout= QVBoxLayout()
     self.localKeys: list[str] = [
       "extraGameArgs",
       "replaceDuplicateGameFilesWithHardlinks",
@@ -2335,13 +2350,13 @@ class Launcher(QWidget):
   def openFile(self, p: str) -> bool:
     return QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.abspath(p)))
 
-  def newSpinBox(self, min_val, max_val, default, saveId, width=60) -> QSpinBox:
+  def newSpinBox(self, min_val:int, max_val:int, default:int, saveId:str, width:int=60) -> QSpinBox:
     node: QSpinBox = QSpinBox()
     node.setRange(min_val, max_val)
     node.setValue(default)
     node.setFixedWidth(width)
 
-    node.valueChanged.connect(lambda v: setattr(self.settings, saveId, v))
+    _ = node.valueChanged.connect(lambda v: setattr(self.settings, saveId, v)) # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
 
     setattr(self.settings, saveId, default)
 
@@ -2378,7 +2393,7 @@ class Launcher(QWidget):
       node.setToolTip(tooltip)
     if onChange:
       _ = node.toggled.connect(onChange)
-    _ = node.toggled.connect(lambda v: setattr(self.settings, saveId, v))
+    _ = node.toggled.connect(lambda v: setattr(self.settings, saveId, v)) # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
     setattr(self.settings, saveId, default)
     self.widgetsToSave[saveId] = node
     return node
@@ -2390,7 +2405,7 @@ class Launcher(QWidget):
     node.setPlaceholderText(placeholder)
     if password:
       node.setEchoMode(QLineEdit.EchoMode.Password)
-    _ = node.textChanged.connect(lambda v: setattr(self.settings, saveId, v))
+    _ = node.textChanged.connect(lambda v: setattr(self.settings, saveId, v)) # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
     setattr(self.settings, saveId, "")
     self.widgetsToSave[saveId] = node
     return node
@@ -2444,15 +2459,16 @@ def run(config: Config, module_name: str | None) -> None:
 
   # Apply the saved geometry before showing the window
   if _last_geometry is not None:
-    _current_window.restoreGeometry(_last_geometry)
+    _ = _current_window.restoreGeometry(_last_geometry)
 
   _current_window.show()
 
   if is_new_app: # Only exec if loop isn't running
     if LAUNCHER_TO_LAUNCH in modules:
-      lwin: None = _current_window
-      run(modules[LAUNCHER_TO_LAUNCH], LAUNCHER_TO_LAUNCH)
-      lwin.close()
+      lwin: Launcher = _current_window
+      launcher_name = cast(str, LAUNCHER_TO_LAUNCH)
+      run(modules[launcher_name], launcher_name)
+      _ = lwin.close()
     sys.exit(app.exec())
 
 
@@ -2486,11 +2502,11 @@ def loadConfig(config: Config) -> None:
         config.hadErrorLoading = True
       paths[module_name] = os.path.abspath(caller_filename)
     else:
-      main_app.paths[module_name] = os.path.abspath(
+      main_app.paths[module_name] = os.path.abspath( # pyright: ignore[reportAny]
         caller_filename
-      ) # pyright: ignore[reportAny]
-      main_app.modules[module_name] = (
-        config # pyright: ignore[reportUnknownMemberType]
+      )
+      main_app.modules[module_name] = ( # pyright: ignore[reportUnknownMemberType]
+        config
       )
   else:
     # We are NOT in the selector (User ran "python mygame.py" directly)
