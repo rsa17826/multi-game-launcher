@@ -10,7 +10,7 @@ from re import Match
 from types import ModuleType
 from requests.models import Response
 from subprocess import CompletedProcess
-from typing import Any, Never, Literal, cast
+from typing import Never, Literal, cast
 import shutil
 import inspect
 from dataclasses import dataclass
@@ -32,7 +32,7 @@ from PySide6.QtGui import (
   QPixmap,
   QIcon,
 )
-from PySide6.QtCore import QCoreApplication, QEvent, QRect, QRectF, QUrl, Signal
+from PySide6.QtCore import QCoreApplication, QRect, QRectF, QUrl, Signal
 from PySide6.QtWidgets import (
   QApplication,
   QWidget,
@@ -73,13 +73,16 @@ from collections.abc import Iterator
 type ReleaseType = dict[str, object]
 from typing import TypedDict
 
+
 class AssetType(TypedDict):
-    name: str
-    url: str
-    browser_download_url: str
+  name: str
+  url: str
+  browser_download_url: str
+
+
 class AssetTypeOptional(AssetType, total=False):
-    size: int
-    content_type: str
+  size: int
+  content_type: str
 
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
@@ -351,7 +354,7 @@ def updateArgs(useArgs: list[str] | None = None):
 updateArgs()
 
 
-from base.launcher.PROTO import PROTO
+from launcher.PROTO import PROTO
 
 
 def protoCalled(msg: str): # type: ignore # pyright: ignore[reportRedeclaration]
@@ -396,6 +399,7 @@ class Statuses(Enum):
 
 # downloading = 2
 # waitingForDownload = 3
+
 
 @dataclass
 class listData:
@@ -1192,13 +1196,13 @@ class Launcher(QWidget):
       release: ReleaseType | None = data.release
       assert release is not None
       asset: AssetType | None = next(
-          (
-              a
-              for a in cast(list[AssetType], release.get("assets", []))
-              if a["name"]
-              == self.config.getAssetName(self.settings, self.settings.selectedOs)
-          ),
-          None,
+        (
+          a
+          for a in cast(list[AssetType], release.get("assets", []))
+          if a["name"]
+          == self.config.getAssetName(self.settings, self.settings.selectedOs)
+        ),
+        None,
       )
 
       if not asset:
@@ -1290,9 +1294,9 @@ class Launcher(QWidget):
     _ = dl_thread.progress.connect(bind[None](self.handleDownloadProgress, tag))
     _ = dl_thread.onfinished.connect(onFinished)
     _ = dl_thread.error.connect(
-      lambda e: print(# pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
+      lambda e: print( # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
         f"DL Error {tag}: {e}"
-      ) 
+      )
     )
 
     _ = dl_thread.onfinished.connect(dl_thread.deleteLater)
@@ -1324,13 +1328,14 @@ class Launcher(QWidget):
     local_versions: set[str] = set[str]()
     if self.config.configs:
       for rel in self.foundReleases:
-        version = rel.get("tag_name")
+        print(rel)
+        version: str | None = cast(str | None, rel.get("tag_name"))
         if version and version not in local_versions:
           all_items_data.append(
             listData(
               version=version,
               status=Statuses.gameSelector,
-              path=rel.get("path"),
+              path=cast(str, rel.get("path")),
               release=rel,
             )
           )
@@ -1352,7 +1357,7 @@ class Launcher(QWidget):
             version_map[dirname] = thing
             local_versions.add(dirname)
       for rel in self.foundReleases:
-        version: str | None = rel.get("tag_name")
+        version = cast(str | None, rel.get("tag_name"))
         if version:
           if version in version_map:
             version_map[version].status = Statuses.local
@@ -1396,7 +1401,9 @@ class Launcher(QWidget):
         assert isinstance(data, listData)
         item: QListWidgetItem = self.listWidget.item(i)
 
-        widget: VersionItemWidget = cast(VersionItemWidget, self.listWidget.itemWidget(item))
+        widget: VersionItemWidget = cast(
+          VersionItemWidget, self.listWidget.itemWidget(item)
+        )
         self.activeItemRefs[data.version] = widget
         assert isinstance(widget, VersionItemWidget)
         if self.settings.showLauncherImages:
@@ -1405,7 +1412,7 @@ class Launcher(QWidget):
           #   widget.setIcon(data.release["config"].getImage(data.version))
           # else:
           #   widget.setIcon(self.config.getImage(data.version))
-          imagePath: str|None = None
+          imagePath: str | None = None
           if data.status == Statuses.gameSelector:
             assert data.release is not None
             imagePath = os.path.join(
@@ -1423,7 +1430,8 @@ class Launcher(QWidget):
         else:
           widget.setModeDisabled()
           match data.status:
-            case Statuses.loadingInfo:pass
+            case Statuses.loadingInfo:
+              pass
             case Statuses.gameSelector:
               assert self.config.configs is not None
               if self.config.configs[data.version].hadErrorLoading:
@@ -1603,7 +1611,7 @@ class Launcher(QWidget):
           )
           if r.status_code != 200:
             break
-          data: list[str]|None =cast(list[str]|None, r.json())
+          data: list[str] | None = cast(list[str] | None, r.json())
           if not data:
             break
 
@@ -1637,9 +1645,7 @@ class Launcher(QWidget):
     self.downloadQueue: list[tuple[str, str, str, str]] = []
     self.setWindowTitle(config.WINDOW_TITLE)
     self.setFixedSize(420, 600)
-    self.setStyleSheet(
-      f.read(os.path.join(LAUNCHER_START_PATH, "main.css"))
-    )
+    self.setStyleSheet(f.read(os.path.join(LAUNCHER_START_PATH, "main.css")))
     self.GAME_ID: str = re.sub(
       r"_{2,}",
       "_",
@@ -1681,7 +1687,7 @@ class Launcher(QWidget):
 
     main_layout.addWidget(self.listWidget)
 
-    self.widgetsToSave: dict[str,QWidget] = {}
+    self.widgetsToSave: dict[str, QWidget] = {}
 
     self.mainProgressBar: VersionItemWidget = VersionItemWidget("", MISSING_COLOR)
     main_layout.addWidget(self.mainProgressBar)
@@ -1714,11 +1720,15 @@ class Launcher(QWidget):
 
     if self.config.configs is not None:
       self.VERSIONS_DIR = "///" # pyright: ignore[reportConstantRedefinition]
-      self.foundReleases: list[dict[str, object]] = list[dict[str, object]](
-        map[dict[str, object]](
-          lambda x: {"tag_name": x, "config": self.config.configs[x], "path": paths[x]}, self.config.configs # pyright: ignore[reportOptionalSubscript]
-        )
-      )
+      self.foundReleases: list[dict[str, object]] = [
+          {
+              "tag_name": x,
+              "config": self.config.configs[x], # pyright: ignore[reportOptionalSubscript]
+              "path": paths[x],
+          }
+          for x in self.config.configs # pyright: ignore[reportOptionalSubscript]
+      ]
+      print(self.foundReleases)
       self.populateList()
       self.mainProgressBar.setModeDisabled()
       if not OFFLINE:
@@ -1758,7 +1768,10 @@ class Launcher(QWidget):
       self.startFetch(max_pages=cast(int, self.settings.maxPagesOnLoad))
       assert self.releaseFetchingThread is not None
       self.releaseFetchingThread.error.connect(
-        lambda e: print("Release fetch error:", e) # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
+        lambda e: print( # pyright: ignore[reportUnknownLambdaType]
+          "Release fetch error:",
+          e, # pyright: ignore[reportUnknownArgumentType]
+        )
       )
       self.releaseFetchingThread.start()
       self.mainProgressBar.show()
@@ -1767,7 +1780,9 @@ class Launcher(QWidget):
     if self.gameName and VERSION:
       for i in range(self.listWidget.count()):
         item: QListWidgetItem = self.listWidget.item(i)
-        data: listData|None = cast(listData|None, item.data(Qt.ItemDataRole.UserRole))
+        data: listData | None = cast(
+          listData | None, item.data(Qt.ItemDataRole.UserRole)
+        )
         if not data:
           continue
         if data.version == VERSION:
@@ -1791,7 +1806,9 @@ class Launcher(QWidget):
       self.loadUserSettings()
 
   def showContextMenu(self, pos: QPoint) -> None:
-    item: QListWidgetItem | None = cast(QListWidgetItem | None, self.listWidget.itemAt(pos))
+    item: QListWidgetItem | None = cast(
+      QListWidgetItem | None, self.listWidget.itemAt(pos)
+    )
     if not item:
       return
 
@@ -1816,17 +1833,16 @@ class Launcher(QWidget):
             ),
           )
       if data.path:
-        path:str=data.path # pyright: ignore[reportRedeclaration]
+        path: str = data.path # pyright: ignore[reportRedeclaration]
         newAction("Open Folder", lambda: self.openFile(os.path.dirname(path)))
-        newAction(
-          f"Delete {data.version} Launcher", lambda: os.remove(path)
-        )
+        newAction(f"Delete {data.version} Launcher", lambda: os.remove(path))
     else:
       if data.path:
-        path:str=data.path
+        path: str = data.path
         newAction("Open Folder", lambda: self.openFile(path))
         newAction(
-          f"Delete Version {data.version}", lambda: (shutil.rmtree(path), self.populateList())
+          f"Delete Version {data.version}",
+          lambda: (shutil.rmtree(path), self.populateList()),
         )
       if data.release:
         newAction(
@@ -1844,7 +1860,9 @@ class Launcher(QWidget):
       return
 
     self.releaseFetchingThread = self.ReleaseFetchThread(
-      self.API_URL, pat=cast(str, self.settings.githubPat) or None, max_pages=max_pages
+      self.API_URL,
+      pat=cast(str, self.settings.githubPat) or None,
+      max_pages=max_pages,
     )
     if max_pages:
       self.mainProgressBar.setModeKnownEnd()
@@ -1859,15 +1877,19 @@ class Launcher(QWidget):
       self.mainProgressBar.label.setText(f"Fetching Page Count...")
     if not noDefaultConnections:
       _ = self.releaseFetchingThread.progress.connect(self.onReleaseProgress)
-      _ = self.releaseFetchingThread.finished.connect(self.onReleaseFinished)
+      _ = self.releaseFetchingThread.onfinished.connect(self.onReleaseFinished)
     self.releaseFetchingThread.start()
 
-  def mergeReleases(self, existing:list[ReleaseType], new_data:list[ReleaseType]) -> list[ReleaseType]:
+  def mergeReleases(
+    self, existing: list[ReleaseType], new_data: list[ReleaseType]
+  ) -> list[ReleaseType]:
 
-    merged: dict[str, ReleaseType] = {cast(str, rel["tag_name"]): rel for rel in existing}
+    merged: dict[str, ReleaseType] = {
+      cast(str, rel["tag_name"]): rel for rel in existing
+    }
 
     for rel in new_data:
-      tag: str|None = cast(str|None,rel.get("tag_name"))
+      tag: str | None = cast(str | None, rel.get("tag_name"))
       if tag:
         merged[tag] = rel
 
@@ -1878,7 +1900,9 @@ class Launcher(QWidget):
     print("Starting Full Release Fetch...")
     self.startFetch(max_pages=0)
 
-  def onReleaseProgress(self, page:int, total:int, releases:list[ReleaseType]) -> None:
+  def onReleaseProgress(
+    self, page: int, total: int, releases: list[ReleaseType]
+  ) -> None:
     self.mainProgressBar.setModeKnownEnd()
     self.mainProgressBar.setProgress((page / total) * 100)
     self.foundReleases = self.mergeReleases(self.foundReleases, releases)
@@ -1887,7 +1911,7 @@ class Launcher(QWidget):
     )
     self.populateList()
 
-  def onReleaseFinished(self, releases:list[ReleaseType]) -> None:
+  def onReleaseFinished(self, releases: list[ReleaseType]) -> None:
     self.mainProgressBar.label.setText("")
     self.mainProgressBar.setModeDisabled()
     self.foundReleases = self.mergeReleases(self.foundReleases, releases)
@@ -1917,7 +1941,7 @@ class Launcher(QWidget):
       )
     )
 
-    def toggleAlwaysOnTop(win: Launcher, on:bool) -> None:
+    def toggleAlwaysOnTop(win: Launcher, on: bool) -> None:
       win.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, on)
       win.show()
 
@@ -1946,7 +1970,7 @@ class Launcher(QWidget):
     outerLayout.addWidget(groupBox)
     # endregion
     # region global
-    groupBox= QGroupBox("Global Settings (All Games)")
+    groupBox = QGroupBox("Global Settings (All Games)")
     groupLayout = QVBoxLayout()
 
     groupLayout.addWidget(
@@ -1971,11 +1995,13 @@ class Launcher(QWidget):
     )
 
     fetchBtnRow: QHBoxLayout = QHBoxLayout()
-    assert isinstance(self.settings.maxPagesOnLoad, int)
+    # assert isinstance(self.settings.maxPagesOnLoad, int)
     fetchBtnRow.addWidget(
       self.newButton(
         "Fetch Recent Updates",
-        lambda: self.startFetch(max_pages=self.settings.maxPagesOnLoad),
+        lambda: self.startFetch(
+          max_pages=cast(int, self.settings.maxPagesOnLoad)
+        ),
       )
     )
     fetchBtnRow.addWidget(self.newButton("Sync Full History", self.startFullFetch))
@@ -2008,7 +2034,7 @@ class Launcher(QWidget):
     groupBox = QGroupBox(
       f"Local Settings ({self.gameName or "Default Settings For New Launchers"})"
     )
-    groupLayout= QVBoxLayout()
+    groupLayout = QVBoxLayout()
     self.localKeys: list[str] = [
       "extraGameArgs",
       "replaceDuplicateGameFilesWithHardlinks",
@@ -2067,22 +2093,22 @@ class Launcher(QWidget):
         lambda: self.openFile(self.getGameDataLocation()),
       )
     )
-    if self.config.addCustomNodes:
-      lastWidgetCount: int = len(self.widgetsToSave)
-      self.config.addCustomNodes(self, groupLayout)
-      for key in islice[Any](self.widgetsToSave.keys(), lastWidgetCount, None):
-        if key not in self.localKeys:
-          self.localKeys.append(key)
+    # if self.config.addCustomNodes:
+    lastWidgetCount: int = len(self.widgetsToSave)
+    self.config.addCustomNodes(self, groupLayout)
+    for key in islice(self.widgetsToSave.keys(), lastWidgetCount, None):
+      if key not in self.localKeys:
+        self.localKeys.append(key)
 
     groupBox.setLayout(groupLayout)
     outerLayout.addWidget(groupBox)
 
     bottom_btn_layout: QHBoxLayout = QHBoxLayout()
     cancel_btn: QPushButton = QPushButton("Cancel")
-    cancel_btn.clicked.connect(self.settingsDialog.reject)
+    _ = cancel_btn.clicked.connect(self.settingsDialog.reject)
     done_btn: QPushButton = QPushButton("Done")
     done_btn.setDefault(True)
-    done_btn.clicked.connect(self.settingsDialog.accept)
+    _ = done_btn.clicked.connect(self.settingsDialog.accept)
 
     bottom_btn_layout.addWidget(cancel_btn)
     bottom_btn_layout.addWidget(done_btn)
@@ -2091,9 +2117,9 @@ class Launcher(QWidget):
 
   def updateSubLauncher(
     self,
-    launcherSettings: Config|None = None,
-    data: listData|None = None,
-    widget: VersionItemWidget|None = None,
+    launcherSettings: Config | None = None,
+    data: listData | None = None,
+    widget: VersionItemWidget | None = None,
   ) -> None:
     ls: Config = launcherSettings or self.config
 
@@ -2101,9 +2127,9 @@ class Launcher(QWidget):
     # create a mock one or find the one matching the current game
     if data is None:
       # Assuming current running file is the target
-      current_path: str = os.path.abspath(os.path.join(APP_DATA_PATH, sys.modules[self.gameName].__file__)) # type: ignore
+      current_path: str = os.path.abspath(os.path.join(APP_DATA_PATH, cast(str, sys.modules[cast(str, self.gameName)].__file__))) # type: ignore
       data = listData(
-        version=self.gameName,
+        version=cast(str, self.gameName),
         path=current_path,
         release=None,
         status=Statuses.gameSelector,
@@ -2115,7 +2141,7 @@ class Launcher(QWidget):
     assert isinstance(widget, VersionItemWidget)
     widget.setModeKnownEnd()
 
-    def on_progress(progress:float) -> None:
+    def on_progress(progress: float) -> None:
       widget.setProgress(progress)
 
     self.downloadingVersions.append(tag)
@@ -2131,7 +2157,7 @@ class Launcher(QWidget):
     )
     self.activeDownloads[tag] = dl_thread
 
-    def on_finished(path:str) -> None:
+    def on_finished(path: str) -> None:
       widget.setModeDisabled()
       found: dict[str, bool] = {"py": False, "png": False}
       extracted = False
@@ -2170,7 +2196,9 @@ class Launcher(QWidget):
               if data.path:
                 if os.path.exists(data.path):
                   os.remove(data.path)
-                _ = shutil.move(os.path.join(root, f"{tag}.py"), data.path)
+                _ = shutil.move(
+                  os.path.join(root, f"{tag}.py"), data.path
+                )
                 found["py"] = True
             if found["png"] and found["py"]:
               break
@@ -2332,7 +2360,7 @@ class Launcher(QWidget):
       os.execl(sys.executable, executable, script_path, *args)
 
     print(self.settings.onRestartRequired)
-    match self.settings.onRestartRequired:
+    match cast(Literal[0, 1, 2], self.settings.onRestartRequired):
       case 0:
         msg = QMessageBox(self)
         msg.setText(text)
@@ -2350,20 +2378,26 @@ class Launcher(QWidget):
   def openFile(self, p: str) -> bool:
     return QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.abspath(p)))
 
-  def newSpinBox(self, min_val:int, max_val:int, default:int, saveId:str, width:int=60) -> QSpinBox:
+  def newSpinBox(
+    self, min_val: int, max_val: int, default: int, saveId: str, width: int = 60
+  ) -> QSpinBox:
     node: QSpinBox = QSpinBox()
     node.setRange(min_val, max_val)
     node.setValue(default)
     node.setFixedWidth(width)
 
-    _ = node.valueChanged.connect(lambda v: setattr(self.settings, saveId, v)) # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
+    _ = node.valueChanged.connect(
+      lambda v: setattr(
+        self.settings, saveId, v
+      ) # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
+    )
 
     setattr(self.settings, saveId, default)
 
     self.widgetsToSave[saveId] = node
     return node
 
-  def newButton(self, text: str, onclick: Callable[[], None] | None) -> QPushButton:
+  def newButton(self, text: str, onclick: Callable[[], object] | None) -> QPushButton:
     node: QPushButton = QPushButton(text)
     if onclick is not None:
       _ = node.pressed.connect(onclick)
@@ -2393,7 +2427,11 @@ class Launcher(QWidget):
       node.setToolTip(tooltip)
     if onChange:
       _ = node.toggled.connect(onChange)
-    _ = node.toggled.connect(lambda v: setattr(self.settings, saveId, v)) # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
+    _ = node.toggled.connect(
+      lambda v: setattr(
+        self.settings, saveId, v
+      ) # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
+    )
     setattr(self.settings, saveId, default)
     self.widgetsToSave[saveId] = node
     return node
@@ -2405,7 +2443,11 @@ class Launcher(QWidget):
     node.setPlaceholderText(placeholder)
     if password:
       node.setEchoMode(QLineEdit.EchoMode.Password)
-    _ = node.textChanged.connect(lambda v: setattr(self.settings, saveId, v)) # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
+    _ = node.textChanged.connect(
+      lambda v: setattr(
+        self.settings, saveId, v
+      ) # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
+    )
     setattr(self.settings, saveId, "")
     self.widgetsToSave[saveId] = node
     return node
@@ -2505,8 +2547,8 @@ def loadConfig(config: Config) -> None:
       main_app.paths[module_name] = os.path.abspath( # pyright: ignore[reportAny]
         caller_filename
       )
-      main_app.modules[module_name] = ( # pyright: ignore[reportUnknownMemberType]
-        config
+      main_app.modules[module_name] = (
+        config # pyright: ignore[reportUnknownMemberType]
       )
   else:
     # We are NOT in the selector (User ran "python mygame.py" directly)
