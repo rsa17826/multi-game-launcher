@@ -67,7 +67,7 @@ import math
 
 import hashlib
 
-from typing_extensions import override # pyright: ignore[reportMissingModuleSource]
+from typing_extensions import override
 from collections.abc import Iterator
 
 type ReleaseType = dict[str, object]
@@ -582,7 +582,6 @@ class f:
       _ = f.write(text)
     return text
 
-
 class AssetDownloadThread(QThread):
   progress: Signal = Signal(int)
   onfinished: Signal = Signal(str)
@@ -596,9 +595,9 @@ class AssetDownloadThread(QThread):
   @override
   def run(self) -> None:
     try:
-      with requests.get(self.url, stream=True) as r:
+      with cast(Response, requests.get(self.url, stream=True)) as r: # pyright: ignore[reportUnknownMemberType, reportPrivateLocalImportUsage]
         r.raise_for_status()
-        total = int(r.headers.get("Content-Length", 0))
+        total = int(r.headers.get("Content-Length", 0)) # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
         downloaded = 0
 
         with open(self.dest, "wb") as f:
@@ -1613,15 +1612,15 @@ class Launcher(QWidget):
           rand: float = random.random()
           final_size = -1
 
-          head: Response = requests.head(
+          head: Response = cast(Response,requests.head( # pyright: ignore[reportUnknownMemberType, reportPrivateLocalImportUsage]
             f"{self.API_URL}?page=0&rand={rand}",
             headers=headers,
             timeout=10,
-          )
+          ))
           if "Link" in head.headers:
             m: Match[str] | None = re.search(
               r'\?page=(\d+)&rand=[\d.]+>; rel="last"',
-              head.headers["Link"],
+              head.headers["Link"], # pyright: ignore[reportUnknownArgumentType]
             )
             if m:
               final_size: int = int(m.group(1)) + 1
@@ -1632,12 +1631,12 @@ class Launcher(QWidget):
           if self.maxPages > 0 and page > self.maxPages:
             break
 
-          r: Response = requests.get(
+          r: Response = cast(Response,requests.get( # pyright: ignore[reportUnknownMemberType, reportPrivateLocalImportUsage]
             f"{self.API_URL}?page={page}", headers=headers, timeout=30
-          )
-          if r.status_code != 200:
+          ))
+          if r.status_code != 200: # pyright: ignore[reportUnnecessaryComparison]
             break
-          data: list[str] | None = cast(list[str] | None, r.json())
+          data: list[str] | None = cast(list[str] | None, cast(list[str],r.json())) # pyright: ignore[reportUnknownMemberType]
           if not data:
             break
 
@@ -1749,10 +1748,10 @@ class Launcher(QWidget):
       self.foundReleases: list[dict[str, object]] = [
         {
           "tag_name": x,
-          "config": self.config.configs[x], # pyright: ignore[reportOptionalSubscript]
+          "config": self.config.configs[x],
           "path": paths[x],
         }
-        for x in self.config.configs # pyright: ignore[reportOptionalSubscript]
+        for x in self.config.configs
       ]
       print(self.foundReleases)
       self.populateList()
@@ -2413,9 +2412,9 @@ class Launcher(QWidget):
     node.setFixedWidth(width)
 
     _ = node.valueChanged.connect(
-      lambda v: setattr(
+      lambda v: setattr( # pyright: ignore[reportUnknownLambdaType, reportUnknownArgumentType]
         self.settings, saveId, v
-      ) # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
+      )
     )
 
     setattr(self.settings, saveId, default)
@@ -2454,9 +2453,9 @@ class Launcher(QWidget):
     if onChange:
       _ = node.toggled.connect(onChange)
     _ = node.toggled.connect(
-      lambda v: setattr(
+      lambda v: setattr( # pyright: ignore[reportUnknownLambdaType, reportUnknownArgumentType]
         self.settings, saveId, v
-      ) # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
+      ) 
     )
     setattr(self.settings, saveId, default)
     self.widgetsToSave[saveId] = node
@@ -2470,9 +2469,9 @@ class Launcher(QWidget):
     if password:
       node.setEchoMode(QLineEdit.EchoMode.Password)
     _ = node.textChanged.connect(
-      lambda v: setattr(
+      lambda v: setattr( # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
         self.settings, saveId, v
-      ) # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
+      )
     )
     setattr(self.settings, saveId, "")
     self.widgetsToSave[saveId] = node
@@ -2573,8 +2572,8 @@ def loadConfig(config: Config) -> None:
       main_app.paths[module_name] = os.path.abspath( # pyright: ignore[reportAny]
         caller_filename
       )
-      main_app.modules[module_name] = (
-        config # pyright: ignore[reportUnknownMemberType]
+      main_app.modules[module_name] = ( # pyright: ignore[reportUnknownMemberType]
+        config
       )
   else:
     # We are NOT in the selector (User ran "python mygame.py" directly)
