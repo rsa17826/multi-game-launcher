@@ -1309,7 +1309,31 @@ class Launcher(QWidget):
     assert isinstance(widget, VersionItemWidget)
     widget.setProgress(percentage)
     widget.label.setText(f"Downloading {version_tag}... ({percentage}%)")
+  def updateAppMenuEntries(self, configs: dict[str, Config]) -> None:
+    """Generates .desktop files for all installed launchers on Linux."""
+    if sys.platform == "linux":
 
+      desktop_dir = os.path.expanduser("~/.local/share/applications")
+      os.makedirs(desktop_dir, exist_ok=True)
+      
+      executable_path = os.path.abspath(sys.argv[0])
+
+      for name, config in configs.items():
+        entry_name = f"launcher-{name}.desktop"
+        entry_path = os.path.join(desktop_dir, entry_name)
+        icon_path = os.path.join(APP_DATA_PATH, "images/" + name + ".png")
+        # Use the WINDOW_TITLE or the name as the Display Name
+        display_name = config.WINDOW_TITLE if config.WINDOW_TITLE else name
+        content = re.sub('^ +', '', f"""[Desktop Entry]
+        Type=Application
+        Name={display_name}
+        Exec="{executable_path}" --launcherName "{name}"
+        Icon=utilities-terminal
+        Terminal=false
+        Icon={icon_path}
+        Categories=Game;
+        """, flags=re.MULTILINE)
+        _ = f.write(entry_path,content)
   def populateList(self) -> None:
     if not self.listWidget:
       return
@@ -1328,6 +1352,7 @@ class Launcher(QWidget):
     all_items_data: list[listData] = []
     local_versions: set[str] = set[str]()
     if self.config.configs:
+      self.updateAppMenuEntries(self.config.configs)
       for rel in self.foundReleases:
         print(rel)
         version: str | None = cast(str | None, rel.get("tag_name"))
@@ -1722,12 +1747,12 @@ class Launcher(QWidget):
     if self.config.configs is not None:
       self.VERSIONS_DIR = "///" # pyright: ignore[reportConstantRedefinition]
       self.foundReleases: list[dict[str, object]] = [
-          {
-              "tag_name": x,
-              "config": self.config.configs[x], # pyright: ignore[reportOptionalSubscript]
-              "path": paths[x],
-          }
-          for x in self.config.configs # pyright: ignore[reportOptionalSubscript]
+        {
+          "tag_name": x,
+          "config": self.config.configs[x], # pyright: ignore[reportOptionalSubscript]
+          "path": paths[x],
+        }
+        for x in self.config.configs # pyright: ignore[reportOptionalSubscript]
       ]
       print(self.foundReleases)
       self.populateList()
@@ -2557,7 +2582,6 @@ def loadConfig(config: Config) -> None:
 
 
 importHavingError: str | None = None
-
 
 def findAllLaunchables() -> None:
   global selectorConfig, _is_selector_loading
