@@ -85,8 +85,6 @@ class AssetTypeOptional(AssetType, total=False):
   content_type: str
 
 
-os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
-
 
 class EnumComboBox(QComboBox):
   usesEnum: bool = False
@@ -240,31 +238,6 @@ def get_app_data_path():
 APP_DATA_PATH = get_app_data_path()
 os.makedirs(APP_DATA_PATH, exist_ok=True)
 
-# import os
-# import sys
-
-# def get_paths(app_name: str):
-#     if sys.platform == "win32":
-#         # Windows: Config goes to 'Roaming', Data goes to 'Local'
-#         config_base = os.environ.get("APPDATA", os.path.expanduser("~/AppData/Roaming"))
-#         data_base = os.environ.get("LOCALAPPDATA", os.path.expanduser("~/AppData/Local"))
-#     elif sys.platform == "darwin":
-#         # macOS: Both usually live in Application Support
-#         config_base = data_base = os.path.expanduser("~/Library/Application Support")
-#     else:
-#         # Linux/Unix: Standard XDG paths
-#         config_base = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
-#         data_base = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
-
-#     return {
-#         "config": os.path.join(config_base, app_name),
-#         "data": os.path.join(data_base, app_name)
-#     }
-
-# paths = get_paths("launcher")
-# APP_CONFIG_PATH = paths["config"]
-# APP_DATA_PATH = paths["data"]
-
 ALL_ARG_DATA = (
   ArgumentData(key="offline", afterCount=0),
   ArgumentData(key=["launcherName", "startLauncher"], afterCount=1),
@@ -334,7 +307,6 @@ REGISTER_PROTOCOLS: object = False
 DOWNLOAD_LAUNCHER: object = False
 
 
-# asdadsas
 def updateArgs(useArgs: list[str] | None = None):
   global OFFLINE, LAUNCHER_TO_LAUNCH, TRY_UPDATE, HEADLESS, VERSION, REGISTER_PROTOCOLS, DOWNLOAD_LAUNCHER
   (
@@ -873,7 +845,6 @@ class VersionItemWidget(QWidget):
     painter.fillRect(rect, grad)
 
 
-os.makedirs(os.path.join(APP_DATA_PATH, "launcherData"), exist_ok=True)
 os.makedirs(os.path.join(APP_DATA_PATH, "images"), exist_ok=True)
 from PySide6.QtCore import QByteArray
 
@@ -1015,7 +986,7 @@ class Launcher(QWidget):
       defaultLocalSettingsFile: str = os.path.join(
         APP_DATA_PATH,
         "-",
-        "launcherData/launcherSettings.json",
+        "launcherData", "launcherSettings.json",
       )
       os.makedirs(os.path.join(APP_DATA_PATH, "-", "launcherData"), exist_ok=True)
       if os.path.exists(defaultLocalSettingsFile):
@@ -1154,9 +1125,9 @@ class Launcher(QWidget):
     gdl = self.getGameDataLocation(data.version)
     _ = f.write(
       os.path.join(
-        (APP_DATA_PATH),
+        APP_DATA_PATH,
         self.GAME_ID,
-        "launcherData/lastRanVersion.txt",
+        "launcherData", "lastRanVersion.txt",
       ),
       data.version,
     )
@@ -1320,7 +1291,7 @@ class Launcher(QWidget):
       for name, config in configs.items():
         entry_name = f"launcher-{name}.desktop"
         entry_path = os.path.join(desktop_dir, entry_name)
-        icon_path = os.path.join(APP_DATA_PATH, "images/" + name + ".png")
+        icon_path = os.path.join(APP_DATA_PATH, "images", name + ".png")
         # Use the WINDOW_TITLE or the name as the Display Name
         display_name = config.WINDOW_TITLE if config.WINDOW_TITLE else name
         content = re.sub('^ +', '', f"""[Desktop Entry]
@@ -1340,9 +1311,9 @@ class Launcher(QWidget):
       try:
         _ = f.write(
           os.path.join(
-            (APP_DATA_PATH),
+            APP_DATA_PATH,
             self.GAME_ID,
-            "launcherData/cache/releases.json",
+            "launcherData", "cache", "releases.json",
           ),
           json.dumps(self.foundReleases),
         )
@@ -1412,16 +1383,9 @@ class Launcher(QWidget):
           _ = self.listWidget.takeItem(self.listWidget.count() - 1)
 
       if self.gameName is not None:
-        if os.path.isfile(
-          os.path.join(APP_DATA_PATH, "images/" + self.gameName + ".png")
-        ):
-          self.setWindowIcon(
-            QIcon(
-              os.path.join(
-                APP_DATA_PATH, "images/" + self.gameName + ".png"
-              )
-            )
-          )
+        icon_path = os.path.join(APP_DATA_PATH, "images", self.gameName + ".png")
+        if os.path.isfile(icon_path):
+          self.setWindowIcon(QIcon(icon_path))
       for i, data in enumerate(sorted_data):
         assert isinstance(data, listData)
         item: QListWidgetItem = self.listWidget.item(i)
@@ -1432,16 +1396,11 @@ class Launcher(QWidget):
         self.activeItemRefs[data.version] = widget
         assert isinstance(widget, VersionItemWidget)
         if self.settings.showLauncherImages:
-          # if data.status == Statuses.gameSelector:
-          #   assert data.release is not None
-          #   widget.setIcon(data.release["config"].getImage(data.version))
-          # else:
-          #   widget.setIcon(self.config.getImage(data.version))
           imagePath: str | None = None
           if data.status == Statuses.gameSelector:
             assert data.release is not None
             imagePath = os.path.join(
-              APP_DATA_PATH, "images/" + data.version + ".png"
+              APP_DATA_PATH, "images", data.version + ".png"
             )
             print(imagePath)
           widget.setIcon(imagePath)
@@ -1522,7 +1481,7 @@ class Launcher(QWidget):
           os.path.join(
             APP_DATA_PATH,
             self.GAME_ID,
-            "launcherData/lastRanVersion.txt",
+            "launcherData", "lastRanVersion.txt",
           )
         ).strip()
       except Exception as e:
@@ -1684,12 +1643,12 @@ class Launcher(QWidget):
       "versions",
     )
     self.GLOBAL_SETTINGS_FILE: str = os.path.join(
-      APP_DATA_PATH, "launcherData/launcherSettings.json"
+      APP_DATA_PATH, "launcherData", "launcherSettings.json"
     )
     self.LOCAL_SETTINGS_FILE: str = os.path.join(
       APP_DATA_PATH,
       self.GAME_ID,
-      "launcherData/launcherSettings.json",
+      "launcherData", "launcherSettings.json",
     )
 
     main_layout: QVBoxLayout = QVBoxLayout(self)
@@ -1769,16 +1728,16 @@ class Launcher(QWidget):
       os.path.join(
         APP_DATA_PATH,
         self.GAME_ID,
-        "launcherData/cache",
+        "launcherData", "cache",
       ),
       exist_ok=True,
     )
     self.foundReleases = json.loads(
       f.read(
         os.path.join(
-          (APP_DATA_PATH),
+          APP_DATA_PATH,
           self.GAME_ID,
-          "launcherData/cache/releases.json",
+          "launcherData", "cache", "releases.json",
         ),
         "[]",
       )
@@ -1952,19 +1911,20 @@ class Launcher(QWidget):
     groupBox: QGroupBox = QGroupBox("Launcher Settings")
     groupLayout: QVBoxLayout = QVBoxLayout()
 
-    groupLayout.addWidget(
-      self.newCheckbox(
-        "Check for Launcher Updates when Opening",
-        False,
-        "checkForLauncherUpdatesWhenOpening",
+    if not os.path.realpath(__file__).startswith('/nix/store'):
+      groupLayout.addWidget(
+        self.newCheckbox(
+          "Check for Launcher Updates when Opening",
+          False,
+          "checkForLauncherUpdatesWhenOpening",
+        )
       )
-    )
-    groupLayout.addWidget(
-      self.newButton(
-        "Update the Launcher Now (Must Have Git Installed)",
-        self.updateLauncher,
+      groupLayout.addWidget(
+        self.newButton(
+          "Update the Launcher Now (Must Have Git Installed)",
+          self.updateLauncher,
+        )
       )
-    )
 
     def toggleAlwaysOnTop(win: Launcher, on: bool) -> None:
       win.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, on)
@@ -2152,7 +2112,7 @@ class Launcher(QWidget):
     # create a mock one or find the one matching the current game
     if data is None:
       # Assuming current running file is the target
-      current_path: str = os.path.abspath(os.path.join(APP_DATA_PATH, cast(str, sys.modules[cast(str, self.gameName)].__file__))) # type: ignore
+      current_path: str = os.path.abspath(cast(str, sys.modules[cast(str, self.gameName)].__file__)) # type: ignore
       data = listData(
         version=cast(str, self.gameName),
         path=current_path,
@@ -2170,9 +2130,7 @@ class Launcher(QWidget):
       widget.setProgress(progress)
 
     self.downloadingVersions.append(tag)
-    dest_dir = os.path.join(
-      os.path.abspath(os.path.join(APP_DATA_PATH, "-")), f"temp_{tag}"
-    )
+    dest_dir = os.path.join(APP_DATA_PATH, "tmp", f"temp_{tag}")
     out_file = os.path.join(dest_dir, ls.LAUNCHER_ASSET_NAME)
     os.makedirs(dest_dir, exist_ok=True)
 
@@ -2200,23 +2158,14 @@ class Launcher(QWidget):
           # Replacement logic
           for root, _, files in os.walk(dest_dir):
             if f"{tag}.png" in files:
-              if data.path:
-                print(
-                  os.path.dirname(data.path),
-                  "os.path.dirname(data.path)",
-                )
-                imgpath = os.path.join(
-                  os.path.dirname(data.path),
-                  "images",
-                  f"{tag}.png",
-                )
-                if os.path.exists(imgpath):
-                  os.remove(imgpath)
-                _ = shutil.move(
-                  os.path.join(root, f"{tag}.png"),
-                  imgpath,
-                )
-                found["png"] = True
+              imgpath = os.path.join(APP_DATA_PATH, "images", f"{tag}.png")
+              if os.path.exists(imgpath):
+                os.remove(imgpath)
+              _ = shutil.move(
+                os.path.join(root, f"{tag}.png"),
+                imgpath,
+              )
+              found["png"] = True
             if f"{tag}.py" in files:
               if data.path:
                 if os.path.exists(data.path):
@@ -2243,130 +2192,6 @@ class Launcher(QWidget):
     _ = dl_thread.onfinished.connect(on_finished)
     _ = dl_thread.onfinished.connect(dl_thread.deleteLater)
     dl_thread.start()
-
-  # def updateSubLauncher(
-  #   self,
-  #   launcherSettings: Optional[Config] = None,
-  #   data: Optional[listData] = None,
-  #   widget: Optional[VersionItemWidget] = None,
-  # ):
-  #   """Refactored unified update logic for the launcher or sub-modules."""
-  #   # Fallback to current config if none provided
-  #   ls = launcherSettings or self.config
-
-  #   # If no data object provided (e.g. from Settings button),
-  #   # create a mock one or find the one matching the current game
-  #   if data is None:
-  #     # Assuming current running file is the target
-  #     current_path = os.path.abspath(sys.modules[self.gameName].__file__) # type: ignore
-  #     data = listData(
-  #       version=self.gameName,
-  #       path=current_path,
-  #       release=None,
-  #       status=Statuses.gameSelector,
-  #     )
-
-  #   tag = data.version
-  #   api_url = f"https://api.github.com/repos/{ls.LAUNCHER_GH_USERNAME or ls.GH_USERNAME}/{ls.LAUNCHER_GH_REPO or ls.GH_REPO}/releases"
-
-  #   fetcher = self.ReleaseFetchThread(
-  #     api_url, pat=self.settings.githubPat or None, max_pages=1
-  #   )
-  #   if not widget:
-  #     widget = self.activeItemRefs.get(tag)
-  #   assert isinstance(widget, VersionItemWidget)
-  #   widget.setModeUnknownEnd()
-
-  #   def on_metadata(widget: VersionItemWidget, releases):
-  #     if not releases:
-  #       return
-  #     data.release = releases[0]
-  #     assert data.release is not None
-  #     widget.setModeKnownEnd()
-
-  #     def on_progress(progress):
-  #       widget.setProgress(progress)
-
-  #     asset_name = ls.LAUNCHER_ASSET_NAME
-  #     asset = next(
-  #       (a for a in data.release.get("assets", []) if a["name"] == asset_name),
-  #       None,
-  #     )
-
-  #     if not asset or tag in self.downloadingVersions:
-  #       self.activeDownloads.pop(f"meta_{tag}", None)
-  #       return
-
-  #     self.downloadingVersions.append(tag)
-  #     dest_dir = os.path.join(
-  #       os.path.abspath(os.path.join(APP_DATA_PATH, "-")), f"temp_{tag}"
-  #     )
-  #     out_file = os.path.join(dest_dir, asset["name"])
-  #     os.makedirs(dest_dir, exist_ok=True)
-
-  #     dl_thread = AssetDownloadThread(asset["browser_download_url"], out_file)
-  #     self.activeDownloads[tag] = dl_thread
-
-  #     def on_finished(path):
-  #       widget.setModeDisabled()
-  #       found = {"py": False, "png": False}
-  #       extracted = False
-  #       try:
-  #         if path.endswith(".zip"):
-  #           with zipfile.ZipFile(path, "r") as z:
-  #             z.extractall(dest_dir)
-  #           extracted = True
-  #         elif path.endswith(".7z"):
-  #           with py7zr.SevenZipFile(path, "r") as z:
-  #             z.extractall(dest_dir)
-  #           extracted = True
-
-  #         if extracted:
-  #           # Replacement logic
-  #           for root, _, files in os.walk(dest_dir):
-  #             if f"{tag}.png" in files:
-  #               if data.path and os.path.exists(data.path):
-  #                 imgpath = os.path.join(
-  #                   os.path.dirname(data.path),
-  #                   "images",
-  #                   f"{tag}.png",
-  #                 )
-  #                 os.remove(imgpath)
-  #                 shutil.move(
-  #                   os.path.join(root, f"{tag}.png"),
-  #                   imgpath,
-  #                 )
-  #                 found["png"] = True
-  #             if f"{tag}.py" in files:
-  #               if data.path and os.path.exists(data.path):
-  #                 os.remove(data.path)
-  #                 shutil.move(
-  #                   os.path.join(root, f"{tag}.py"), data.path
-  #                 )
-  #                 found["py"] = True
-  #             if found["png"] and found["py"]:
-  #               break
-  #       except Exception as e:
-  #         print(f"Update failed for {tag}: {e}")
-  #       finally:
-  #         if tag in self.downloadingVersions:
-  #           self.downloadingVersions.remove(tag)
-  #         self.activeDownloads.pop(tag, None)
-  #         self.activeDownloads.pop(f"meta_{tag}", None)
-  #         shutil.rmtree(dest_dir, ignore_errors=True)
-  #         self.populateList()
-  #         if found["py"]:
-  #           self.showRestartPrompt(f"{tag} updated successfully.")
-
-  #     dl_thread.progress.connect(on_progress)
-  #     dl_thread.finished.connect(on_finished)
-  #     dl_thread.finished.connect(dl_thread.deleteLater)
-  #     dl_thread.start()
-
-  #   fetcher.finished.connect(bind(on_metadata, widget))
-  #   fetcher.finished.connect(fetcher.deleteLater)
-  #   self.activeDownloads[f"meta_{tag}"] = fetcher
-  #   fetcher.start()
 
   def showRestartPrompt(self, text: str) -> None:
     def restart() -> Never:
@@ -2648,10 +2473,6 @@ def findAllLaunchables() -> None:
 
 if __name__ == "__main__":
   findAllLaunchables()
-# APP_DATA_PATH
-#             if True
-#             else ""
-# self.settings.centralGameDataLocations
 
 # TODO make del on launcher selector update ui
 # TODO add settying in app to register proto
