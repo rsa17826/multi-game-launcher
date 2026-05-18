@@ -2,8 +2,12 @@
   description = "Launcher application";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
+    nixpkgs = {
+      url = "github:NixOS/nixpkgs/nixos-unstable";
+    };
+    flake-utils = {
+      url = "github:numtide/flake-utils";
+    };
   };
 
   outputs =
@@ -65,14 +69,16 @@
           inherit launcher;
           default = launcher;
         };
-
-        devShells.default = pkgs.mkShell {
-          buildInputs = [ (python.withPackages (_: pythonDeps)) ];
+        devShells = {
+          default = pkgs.mkShell {
+            buildInputs = [ (python.withPackages (_: pythonDeps)) ];
+          };
         };
-
-        apps.default = {
-          type = "app";
-          program = "${launcher}/bin/launcher";
+        apps = {
+          default = {
+            type = "app";
+            program = "${launcher}/bin/launcher";
+          };
         };
       }
     );
